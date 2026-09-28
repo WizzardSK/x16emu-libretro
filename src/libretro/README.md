@@ -61,5 +61,5 @@ frontends), without SDL.
 ## Builds
 
 `.github/workflows/libretro.yml` builds Linux (x86_64, aarch64), Windows,
-macOS (arm64, x86_64) and Android (`jni/`, arm64-v8a, armeabi-v7a, x86_64,
+macOS (universal arm64 + x86_64) and Android (`jni/`, arm64-v8a, armeabi-v7a, x86_64,
 x86) and publishes them in the `libretro-latest` release.

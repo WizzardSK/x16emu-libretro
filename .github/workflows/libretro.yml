@@ -30,13 +30,10 @@ jobs:
             deps: sudo apt-get update && sudo apt-get install -y gcc-mingw-w64-x86-64 g++-mingw-w64-x86-64
             make: make -f Makefile.libretro -j4 platform=win CC=x86_64-w64-mingw32-gcc CXX=x86_64-w64-mingw32-g++
             out: x16emu_libretro.dll
-          - name: macos-arm64
+          # One universal dylib (arm64 + x86_64); Intel macOS runners are gone
+          - name: macos-universal
             os: macos-14
-            make: make -f Makefile.libretro -j4 platform=osx
-            out: x16emu_libretro.dylib
-          - name: macos-x86_64
-            os: macos-13
-            make: make -f Makefile.libretro -j4 platform=osx
+            make: make -f Makefile.libretro -j4 platform=osx CFLAGS="-arch arm64 -arch x86_64" CXXFLAGS="-arch arm64 -arch x86_64" LDFLAGS="-arch arm64 -arch x86_64"
             out: x16emu_libretro.dylib
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
