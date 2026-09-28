@@ -21,6 +21,16 @@ jobs:
             os: ubuntu-22.04
             make: make -f Makefile.libretro -j4
             out: x16emu_libretro.so
+          - name: linux-i686
+            os: ubuntu-22.04
+            deps: sudo apt-get update && sudo apt-get install -y gcc-multilib g++-multilib
+            make: make -f Makefile.libretro -j4 HAVE_ZLIB=0 CFLAGS=-m32 CXXFLAGS=-m32 LDFLAGS=-m32
+            out: x16emu_libretro.so
+          - name: windows-i686
+            os: ubuntu-22.04
+            deps: sudo apt-get update && sudo apt-get install -y gcc-mingw-w64-i686 g++-mingw-w64-i686
+            make: make -f Makefile.libretro -j4 platform=win CC=i686-w64-mingw32-gcc CXX=i686-w64-mingw32-g++
+            out: x16emu_libretro.dll
           - name: linux-aarch64
             os: ubuntu-22.04-arm
             make: make -f Makefile.libretro -j4
@@ -35,6 +45,14 @@ jobs:
             os: macos-14
             make: make -f Makefile.libretro -j4 platform=osx CFLAGS="-arch arm64 -arch x86_64" CXXFLAGS="-arch arm64 -arch x86_64" LDFLAGS="-arch arm64 -arch x86_64"
             out: x16emu_libretro.dylib
+          - name: ios-arm64
+            os: macos-14
+            make: make -f Makefile.libretro -j4 platform=ios-arm64
+            out: x16emu_libretro_ios.dylib
+          - name: tvos-arm64
+            os: macos-14
+            make: make -f Makefile.libretro -j4 platform=tvos-arm64
+            out: x16emu_libretro_tvos.dylib
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     steps:

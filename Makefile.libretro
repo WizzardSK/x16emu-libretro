@@ -1,6 +1,6 @@
 # Commander X16 Emulator - libretro core
 #
-#   make -f Makefile.libretro [platform=unix|osx|win] [HAVE_ZLIB=0]
+#   make -f Makefile.libretro [platform=unix|osx|win|ios-arm64|tvos-arm64] [arch=arm64|x86_64] [HAVE_ZLIB=0]
 #
 # Builds x16emu_libretro.{so,dylib,dll} without SDL: src/libretro/shim/SDL.h
 # stands in for the few SDL pieces (file I/O, timers, scancodes) the emulation
@@ -19,11 +19,46 @@ ifeq ($(platform),)
   endif
 endif
 
+# PLATFORM_FLAGS go on every compile and on the link, so they survive CFLAGS
+# given on the command line
+PLATFORM_FLAGS :=
+
 ifeq ($(platform),osx)
   TARGET := $(TARGET_NAME)_libretro.dylib
   fpic := -fPIC
   SHARED := -dynamiclib
-else ifeq ($(platform),win)
+  ifeq ($(CROSS_COMPILE),1)
+    # libretro CI: e.g. LIBRETRO_APPLE_PLATFORM=arm64-apple-macos11
+    PLATFORM_FLAGS += -target $(LIBRETRO_APPLE_PLATFORM) -isysroot $(LIBRETRO_APPLE_ISYSROOT)
+  else ifneq ($(arch),)
+    PLATFORM_FLAGS += -arch $(arch)
+  endif
+  ifeq ($(arch),arm64)
+    PLATFORM_FLAGS += -mmacosx-version-min=11.0
+  else
+    PLATFORM_FLAGS += -mmacosx-version-min=10.13
+  endif
+else ifneq (,$(findstring ios,$(platform)))
+  TARGET := $(TARGET_NAME)_libretro_ios.dylib
+  fpic := -fPIC
+  SHARED := -dynamiclib
+  ifeq ($(IOSSDK),)
+    IOSSDK := $(shell xcodebuild -version -sdk iphoneos Path)
+  endif
+  ifeq ($(platform),ios-arm64)
+    PLATFORM_FLAGS += -arch arm64 -isysroot $(IOSSDK) -miphoneos-version-min=11.0
+  else
+    PLATFORM_FLAGS += -arch armv7 -isysroot $(IOSSDK) -miphoneos-version-min=9.0
+  endif
+else ifeq ($(platform),tvos-arm64)
+  TARGET := $(TARGET_NAME)_libretro_tvos.dylib
+  fpic := -fPIC
+  SHARED := -dynamiclib
+  ifeq ($(IOSSDK),)
+    IOSSDK := $(shell xcodebuild -version -sdk appletvos Path)
+  endif
+  PLATFORM_FLAGS += -arch arm64 -isysroot $(IOSSDK) -mappletvos-version-min=11.0
+else ifneq (,$(findstring win,$(platform)))
   TARGET := $(TARGET_NAME)_libretro.dll
   SHARED := -shared -static-libgcc -static-libstdc++ -Wl,--version-script=src/libretro/link.T
   # winpthreads for midi.c, linked in so the DLL needs nothing beside it
@@ -61,8 +96,8 @@ else
 endif
 # Kept apart from CFLAGS/CXXFLAGS so flags given on the command line add to
 # the build instead of replacing the include paths and defines
-X16_CFLAGS := $(OPTFLAGS) $(fpic) $(DEFINES) $(INCFLAGS) -std=gnu11 -Wno-unused-function
-X16_CXXFLAGS := $(OPTFLAGS) $(fpic) $(DEFINES) $(INCFLAGS) -std=c++14
+X16_CFLAGS := $(OPTFLAGS) $(fpic) $(PLATFORM_FLAGS) $(DEFINES) $(INCFLAGS) -std=gnu11 -Wno-unused-function
+X16_CXXFLAGS := $(OPTFLAGS) $(fpic) $(PLATFORM_FLAGS) $(DEFINES) $(INCFLAGS) -std=c++14
 
 all: $(TARGET)
 
@@ -73,7 +108,7 @@ $(GENERATED)/git_rev.h:
 $(OBJECTS): $(GENERATED)/git_rev.h
 
 $(TARGET): $(OBJECTS)
-	$(CXX) $(fpic) $(SHARED) -o $@ $(OBJECTS) $(LDFLAGS) $(LIBS)
+	$(CXX) $(fpic) $(PLATFORM_FLAGS) $(SHARED) -o $@ $(OBJECTS) $(LDFLAGS) $(LIBS)
 
 %.lo: %.c
 	$(CC) $(X16_CFLAGS) $(CFLAGS) -c -o $@ $<
