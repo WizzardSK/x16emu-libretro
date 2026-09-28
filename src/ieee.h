@@ -3,6 +3,9 @@
 // All rights reserved. License: 2-clause BSD
 
 void ieee_init();
+#ifdef __LIBRETRO__
+void ieee_libretro_release(void);
+#endif
 int SECOND(uint8_t a);
 int TKSA(uint8_t a);
 int ACPTR(uint8_t *a);

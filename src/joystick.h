@@ -23,4 +23,8 @@ void joystick_button_up(int instance_id, uint8_t button);
 void joystick_set_latch(bool value);
 void joystick_set_clock(bool value);
 
+#ifdef __LIBRETRO__
+void joystick_libretro_set(int port, uint16_t pressed);
+#endif
+
 #endif

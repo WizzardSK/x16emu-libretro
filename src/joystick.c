@@ -1,6 +1,11 @@
 #include "joystick.h"
 
 #include <SDL.h>
+#ifdef __LIBRETRO__
+// Four fixed pads fed from the libretro input state; no SDL game controllers.
+typedef void SDL_GameController;
+#define SDL_CONTROLLER_BUTTON_MAX 15
+#endif
 #include <stdio.h>
 
 struct joystick_info {
@@ -105,6 +110,38 @@ static int Joystick_slots[NUM_JOYSTICKS];
 static bool Joystick_latch = false;
 uint8_t Joystick_data  = 0;
 
+#ifdef __LIBRETRO__
+bool
+joystick_init(void)
+{
+	free(Joystick_controllers);
+	Num_joystick_controllers = NUM_JOYSTICKS;
+	Joystick_controllers     = malloc(sizeof(struct joystick_info) * Num_joystick_controllers);
+	for (int i = 0; i < NUM_JOYSTICKS; ++i) {
+		Joystick_slots[i]                   = i;
+		Joystick_slots_enabled[i]           = true;
+		Joystick_controllers[i].instance_id = i;
+		Joystick_controllers[i].controller  = NULL;
+		Joystick_controllers[i].button_mask = 0xffff;
+		Joystick_controllers[i].shift_mask  = 0;
+	}
+	return true;
+}
+
+void joystick_add(int index) { (void)index; }
+void joystick_remove(int instance_id) { (void)instance_id; }
+
+// pressed: SNES button bits (B Y Select Start Up Down Left Right A X L R),
+// which is also the RetroPad button numbering
+void
+joystick_libretro_set(int port, uint16_t pressed)
+{
+	struct joystick_info *joy = find_joystick_controller(port);
+	if (joy != NULL) {
+		joy->button_mask = ~pressed;
+	}
+}
+#else
 bool
 joystick_init(void)
 {
@@ -196,6 +233,8 @@ joystick_remove(int instance_id)
 		remove_joystick_controller(instance_id);
 	}
 }
+
+#endif
 
 void
 joystick_button_down(int instance_id, uint8_t button)

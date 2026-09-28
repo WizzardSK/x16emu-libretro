@@ -7,3 +7,10 @@ src/x16edit_E_labels.h
 .vscode/
 .idea/
 /build
+
+# libretro core build
+*.lo
+x16emu_libretro.so
+x16emu_libretro.dylib
+x16emu_libretro.dll
+src/libretro/generated/

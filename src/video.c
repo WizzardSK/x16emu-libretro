@@ -18,7 +18,9 @@
 #include "vera_spi.h"
 #include "vera_psg.h"
 #include "vera_pcm.h"
+#ifndef __LIBRETRO__
 #include "icon.h"
+#endif
 #include "sdcard.h"
 #include "i2c.h"
 #include "audio.h"
@@ -89,9 +91,11 @@
 
 #define MAX(a,b) ((a) > (b) ? a : b)
 
+#ifndef __LIBRETRO__
 static SDL_Window *window;
 static SDL_Renderer *renderer;
 static SDL_Texture *sdlTexture;
+#endif
 static bool is_fullscreen = false;
 bool mouse_grabbed = false;
 bool no_keyboard_capture = false;
@@ -211,8 +215,10 @@ static void refresh_palette();
 void
 mousegrab_toggle() {
 	mouse_grabbed = !mouse_grabbed;
+#ifndef __LIBRETRO__
 	SDL_SetWindowGrab(window, mouse_grabbed && !no_keyboard_capture);
 	SDL_SetRelativeMouseMode(mouse_grabbed);
+#endif
 	SDL_ShowCursor((mouse_grabbed || kernal_mouse_enabled) ? SDL_DISABLE : SDL_ENABLE);
 	sprintf(window_title, WINDOW_TITLE "%s", mouse_grabbed ? MOUSE_GRAB_MSG : "");
 	video_update_title(window_title);
@@ -314,6 +320,21 @@ video_reset()
 	pcm_reset();
 }
 
+#ifdef __LIBRETRO__
+// The frontend owns the window; the core only renders into framebuffer
+bool
+video_init(int window_scale, float screen_x_scale, char *quality, bool fullscreen, float opacity)
+{
+	video_reset();
+	return true;
+}
+
+const uint32_t *
+video_get_framebuffer(void)
+{
+	return (const uint32_t *)framebuffer;
+}
+#else
 bool
 video_init(int window_scale, float screen_x_scale, char *quality, bool fullscreen, float opacity)
 {
@@ -385,6 +406,7 @@ video_init(int window_scale, float screen_x_scale, char *quality, bool fullscree
 
 	return true;
 }
+#endif
 
 struct video_layer_properties
 {
@@ -1359,6 +1381,10 @@ video_update()
 		}
 	}
 
+#ifdef __LIBRETRO__
+	// Presenting the frame and reading input are the frontend's job
+	return true;
+#else
 	SDL_UpdateTexture(sdlTexture, NULL, framebuffer, SCREEN_WIDTH * 4);
 
 	if (record_gif > RECORD_GIF_PAUSED) {
@@ -1529,24 +1555,29 @@ video_update()
 		mouse_send_state();
 	}
 	return true;
+#endif
 }
 
 void
 video_end()
 {
+#ifndef __LIBRETRO__
 	if (debugger_enabled) {
 		DEBUGFreeUI();
 	}
+#endif
 
 	if (record_gif != RECORD_GIF_DISABLED) {
 		GifEnd(&gif_writer);
 		record_gif = RECORD_GIF_DISABLED;
 	}
 
+#ifndef __LIBRETRO__
 	is_fullscreen = false;
 	SDL_SetWindowFullscreen(window, 0);
 	SDL_DestroyRenderer(renderer);
 	SDL_DestroyWindow(window);
+#endif
 }
 
 
@@ -2375,7 +2406,9 @@ void video_write(uint8_t reg, uint8_t value) {
 void
 video_update_title(const char* window_title)
 {
+#ifndef __LIBRETRO__
 	SDL_SetWindowTitle(window, window_title);
+#endif
 }
 
 bool video_is_tilemap_address(int addr)
@@ -2424,6 +2457,11 @@ stop6502(uint16_t address, uint8_t bank) {
 		printf("STP\n");
         fflush(stdout);
 	} else {
+#ifdef __LIBRETRO__
+		// No dialog to ask with: do what "Reset Machine" would
+		fprintf(stderr, "Encountered stop instruction at address $%04X. Resetting.\n", address);
+		machine_reset();
+#else
 		int return_btn;
 		char error_message[80];
 		const SDL_MessageBoxButtonData btns[2] = {
@@ -2443,5 +2481,6 @@ stop6502(uint16_t address, uint8_t bank) {
 		if (SDL_ShowMessageBox(&msg_box, &return_btn) == 0 && return_btn == 0) {
 			machine_reset();
 		};
+#endif
 	}
 }

@@ -2212,3 +2212,28 @@ XMCIOUT(uint8_t stream_mode) // stream_mode is only for passing into MCIOUT fall
 		return -2; // not us, do not handle
 	}
 }
+
+#ifdef __LIBRETRO__
+// A libretro core loads one game after another in the same process: drop the
+// HostFS root, cwd and open channels so the next ieee_init() starts over with
+// the new game's directory (fsroot_path/startin_path, set by the caller).
+void
+ieee_libretro_release(void)
+{
+	if (ieee_initialized_once) {
+		for (int ch = 0; ch < 16; ch++) {
+			cclose(ch);
+		}
+		free(hostfscwd);
+		hostfscwd = NULL;
+		if (startin_path != fsroot_path) {
+			free(startin_path);
+		}
+		free(fsroot_path);
+		ieee_initialized_once = false;
+	}
+	fsroot_path = NULL;
+	startin_path = NULL;
+	prg_consumed = false;
+}
+#endif

@@ -65,7 +65,13 @@ static const int16_t filter[512] = {
 	  -80,  -74,  -69,  -63,  -58,  -53,  -47,  -42,  -37,  -32,  -27,  -22,  -17,  -12,   -7,   -2
 };
 
+#ifdef __LIBRETRO__
+// No audio device: audio_render() fills the ring buffer and the libretro
+// frontend drains it once per frame (audio_libretro_read).
+static int audio_dev;
+#else
 static SDL_AudioDeviceID audio_dev;
+#endif
 static int16_t * buffer;
 static uint32_t buffer_size = 0;
 static uint32_t rdidx = 0;
@@ -92,6 +98,7 @@ static int16_t fs_buf[2 * SAMPLES_PER_BUFFER];
 
 uint32_t host_sample_rate = 0;
 
+#ifndef __LIBRETRO__
 static void
 audio_callback(void *userdata, Uint8 *stream, int len)
 {
@@ -126,6 +133,21 @@ audio_callback(void *userdata, Uint8 *stream, int len)
 	}
 	if (len > 0) memset(&stream[spos], 0, len);
 }
+#else
+size_t
+audio_libretro_read(int16_t *out, size_t max_frames)
+{
+	size_t frames = 0;
+	while (frames < max_frames && buffer_written >= 2) {
+		out[frames * 2] = buffer[rdidx];
+		out[frames * 2 + 1] = buffer[rdidx + 1];
+		rdidx = (rdidx + 2) % buffer_size;
+		buffer_written -= 2;
+		frames++;
+	}
+	return frames;
+}
+#endif
 
 void
 audio_init(const char *dev_name, int num_audio_buffers)
@@ -156,6 +178,10 @@ audio_init(const char *dev_name, int num_audio_buffers)
 	wridx = 0;
 	buffer_written = 0;
 
+#ifdef __LIBRETRO__
+	struct { int freq; } obtained = { AUDIO_SAMPLERATE };
+	audio_dev = 1;
+#else
 	SDL_AudioSpec desired;
 	SDL_AudioSpec obtained;
 
@@ -180,6 +206,7 @@ audio_init(const char *dev_name, int num_audio_buffers)
 		audio_close();
 		return;
 	}
+#endif
 
 	// Init YM2151 emulation. 3.579545 MHz clock
 	YM_Create(3579545);
@@ -205,8 +232,10 @@ audio_init(const char *dev_name, int num_audio_buffers)
 	ym_buf[0] = ym_buf[1] = 0;
 	fs_buf[0] = fs_buf[1] = 0;
 
+#ifndef __LIBRETRO__
 	// Start playback
 	SDL_PauseAudioDevice(audio_dev, 0);
+#endif
 }
 
 void
@@ -216,7 +245,9 @@ audio_close(void)
 		return;
 	}
 
+#ifndef __LIBRETRO__
 	SDL_CloseAudioDevice(audio_dev);
+#endif
 	audio_dev = 0;
 
 	// Free audio buffers
@@ -309,7 +340,9 @@ audio_render()
 	len_fs = (len_fs - (4 << SAMP_POS_FRAC_BITS)) / fs_samps_per_host_samps;
 	len = SDL_min(len_vera, len_ym);
 	len = SDL_min(len, len_fs);
+#ifndef __LIBRETRO__
 	SDL_LockAudioDevice(audio_dev);
+#endif
 	for (int i = 0; i < len; i++) {
 		int32_t samp[8];
 		int32_t filter_idx = 0;
@@ -410,7 +443,9 @@ audio_render()
 		rdidx = (rdidx + buffer_skip_amount) % buffer_size;
 		buffer_written -= buffer_skip_amount;
 	}
+#ifndef __LIBRETRO__
 	SDL_UnlockAudioDevice(audio_dev);
+#endif
 
 	// catch up all buffers if they are too far behind
 	uint32_t skip = len_vera - len;
@@ -430,6 +465,9 @@ audio_render()
 void
 audio_usage(void)
 {
+#ifdef __LIBRETRO__
+}
+#else
 	// SDL_GetAudioDeviceName doesn't work if audio isn't initialized.
 	// Since argument parsing happens before initializing SDL, ensure the
 	// audio subsystem is initialized before printing audio device names.
@@ -445,3 +483,4 @@ audio_usage(void)
 	SDL_Quit();
 	exit(1);
 }
+#endif

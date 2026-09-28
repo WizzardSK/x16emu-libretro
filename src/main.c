@@ -150,6 +150,9 @@ SDL_RWops *prg_file;
 bool prg_finished_loading;
 int prg_override_start = -1;
 bool run_after_load = false;
+// Set once the LOAD":*" for prg_file has been typed. Not static in the loop
+// so the libretro core can clear it when it loads the next game.
+bool prg_done = false;
 
 char *nvram_path = NULL;
 
@@ -596,6 +599,8 @@ void no_fluidsynth_warning(void)
 	}
 }
 
+#ifndef __LIBRETRO__
+// The libretro core sets the machine up in src/libretro/libretro.c instead
 int
 main(int argc, char **argv)
 {
@@ -1298,12 +1303,16 @@ main(int argc, char **argv)
 	return 0;
 }
 
+#endif
+
 void main_shutdown() {
 	if (!headless){
 		wav_recorder_shutdown();
 		audio_close();
 		video_end();
+#ifndef __LIBRETRO__
 		SDL_Quit();
+#endif
 	}
 	if(cartridge_path) {
 		cartridge_save_nvram();
@@ -1755,8 +1764,9 @@ emulator_loop(void *param)
 			}
 
 			timing_update();
-#ifdef __EMSCRIPTEN__
-			// After completing a frame we yield back control to the browser to stay responsive
+#if defined(__EMSCRIPTEN__) || defined(__LIBRETRO__)
+			// After completing a frame we yield back control to the browser
+			// (or the libretro frontend) to stay responsive
 			return 0;
 #endif
 		}
@@ -1819,8 +1829,6 @@ emulator_loop(void *param)
 
 			if (regs.pc == 0xffcf) {
 				// as soon as BASIC starts reading a line...
-				static bool prg_done = false;
-
 				if (prg_file && !prg_done) {
 					int loadlen = 0;
 					// LOAD":*" will cause the IEEE library

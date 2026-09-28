@@ -26,7 +26,9 @@ void DEBUGRenderDisplay(int width,int height);
 void DEBUGBreakToDebugger(void);
 int  DEBUGGetCurrentStatus(void);
 void DEBUGSetBreakPoint(struct breakpoint newBreakPoint);
+#ifndef __LIBRETRO__
 void DEBUGInitUI(SDL_Renderer *pRenderer);
+#endif
 void DEBUGFreeUI();
 
 #define DBG_WIDTH 		(60)									// Char cells across

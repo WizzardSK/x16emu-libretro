@@ -1,0 +1,114 @@
+# Commander X16 Emulator - libretro core
+#
+#   make -f Makefile.libretro [platform=unix|osx|win] [HAVE_ZLIB=0]
+#
+# Builds x16emu_libretro.{so,dylib,dll} without SDL: src/libretro/shim/SDL.h
+# stands in for the few SDL pieces (file I/O, timers, scancodes) the emulation
+# code uses, and the window/audio/controller code is compiled out with
+# __LIBRETRO__.
+
+TARGET_NAME := x16emu
+HAVE_ZLIB ?= 1
+
+ifeq ($(platform),)
+  platform = unix
+  ifeq ($(shell uname -s),)
+    platform = win
+  else ifneq ($(findstring Darwin,$(shell uname -s)),)
+    platform = osx
+  else ifneq ($(findstring MINGW,$(shell uname -s)),)
+    platform = win
+  endif
+endif
+
+ifeq ($(platform),osx)
+  TARGET := $(TARGET_NAME)_libretro.dylib
+  fpic := -fPIC
+  SHARED := -dynamiclib
+else ifeq ($(platform),win)
+  TARGET := $(TARGET_NAME)_libretro.dll
+  SHARED := -shared -static-libgcc -static-libstdc++ -Wl,--version-script=src/libretro/link.T
+else
+  TARGET := $(TARGET_NAME)_libretro.so
+  fpic := -fPIC
+  SHARED := -shared -Wl,--version-script=src/libretro/link.T -Wl,--no-undefined
+  LIBS += -lm -ldl -lpthread
+endif
+
+SRC := src
+SOURCES_C := \
+	$(SRC)/cpu/fake6502.c \
+	$(SRC)/memory.c \
+	$(SRC)/disasm.c \
+	$(SRC)/video.c \
+	$(SRC)/i2c.c \
+	$(SRC)/smc.c \
+	$(SRC)/rtc.c \
+	$(SRC)/via.c \
+	$(SRC)/serial.c \
+	$(SRC)/ieee.c \
+	$(SRC)/vera_spi.c \
+	$(SRC)/audio.c \
+	$(SRC)/vera_pcm.c \
+	$(SRC)/vera_psg.c \
+	$(SRC)/sdcard.c \
+	$(SRC)/main.c \
+	$(SRC)/joystick.c \
+	$(SRC)/keyboard.c \
+	$(SRC)/timing.c \
+	$(SRC)/wav_recorder.c \
+	$(SRC)/testbench.c \
+	$(SRC)/files.c \
+	$(SRC)/cartridge.c \
+	$(SRC)/iso_8859_15.c \
+	$(SRC)/midi.c \
+	$(SRC)/libretro/libretro.c \
+	$(SRC)/libretro/debugger_stub.c
+SOURCES_CXX := \
+	$(SRC)/ymglue.cpp \
+	$(SRC)/extern/ymfm/src/ymfm_opm.cpp
+
+OBJECTS := $(SOURCES_C:.c=.lo) $(SOURCES_CXX:.cpp=.lo)
+
+GIT_REV := $(shell git rev-parse --short=8 HEAD 2>/dev/null || echo 00000000)
+GENERATED := $(SRC)/libretro/generated
+
+DEFINES := -D__LIBRETRO__
+ifeq ($(HAVE_ZLIB),1)
+  DEFINES += -DHAVE_ZLIB
+  LIBS += -lz
+endif
+
+INCFLAGS := -I$(SRC)/libretro/shim -I$(SRC) -I$(SRC)/extern/include -I$(SRC)/extern/ymfm/src -I$(GENERATED)
+ifeq ($(DEBUG),1)
+  OPTFLAGS := -O0 -g
+else
+  OPTFLAGS := -O2 -DNDEBUG
+endif
+# Kept apart from CFLAGS/CXXFLAGS so flags given on the command line add to
+# the build instead of replacing the include paths and defines
+X16_CFLAGS := $(OPTFLAGS) $(fpic) $(DEFINES) $(INCFLAGS) -std=gnu11 -Wno-unused-function
+X16_CXXFLAGS := $(OPTFLAGS) $(fpic) $(DEFINES) $(INCFLAGS) -std=c++14
+
+all: $(TARGET)
+
+$(GENERATED)/git_rev.h:
+	@mkdir -p $(GENERATED)
+	@echo '#define GIT_REV "$(GIT_REV)"' > $@
+
+$(OBJECTS): $(GENERATED)/git_rev.h
+
+$(TARGET): $(OBJECTS)
+	$(CXX) $(fpic) $(SHARED) -o $@ $(OBJECTS) $(LDFLAGS) $(LIBS)
+
+%.lo: %.c
+	$(CC) $(X16_CFLAGS) $(CFLAGS) -c -o $@ $<
+
+%.lo: %.cpp
+	$(CXX) $(X16_CXXFLAGS) $(CXXFLAGS) -c -o $@ $<
+
+clean:
+	rm -f $(OBJECTS) $(TARGET)
+	rm -rf $(GENERATED)
+
+.PHONY: all clean

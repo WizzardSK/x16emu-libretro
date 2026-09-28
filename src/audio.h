@@ -14,3 +14,8 @@ void audio_step(int cpu_clocks);
 void audio_render();
 
 void audio_usage(void);
+
+#ifdef __LIBRETRO__
+#include <stddef.h>
+size_t audio_libretro_read(int16_t *out, size_t max_frames);
+#endif

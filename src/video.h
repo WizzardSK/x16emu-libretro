@@ -37,4 +37,10 @@ uint32_t video_get_address(uint8_t sel);
 uint32_t video_get_fx_accum(void);
 uint8_t video_get_dc_value(uint8_t reg);
 
+#ifdef __LIBRETRO__
+#define X16_SCREEN_WIDTH 640
+#define X16_SCREEN_HEIGHT 480
+const uint32_t *video_get_framebuffer(void);
+#endif
+
 #endif

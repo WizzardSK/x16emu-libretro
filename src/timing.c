@@ -35,6 +35,11 @@ timing_update()
 	clockticks6502_old = clockticks6502;
 	uint32_t sdlTicks = SDL_GetTicks() - sdlTicks_base;
 	int64_t diff_time = cpu_ticks / MHZ - sdlTicks * 1000LL;
+#ifdef __LIBRETRO__
+	// The frontend paces frames; sleeping here would only add latency.
+	(void)diff_time;
+	return;
+#endif
 	if (!warp_mode && diff_time > 0) {
 		if (diff_time >= 1000000) {
 			sleep(diff_time / 1000000);

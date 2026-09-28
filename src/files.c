@@ -11,7 +11,10 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <SDL.h>
+#if !defined(__LIBRETRO__) || defined(HAVE_ZLIB)
 #include <zlib.h>
+#define X16_HAVE_ZLIB 1
+#endif
 #include <inttypes.h>
 
 struct x16file
@@ -98,6 +101,7 @@ x16open(const char *path, const char *attribs)
 	struct x16file *f = malloc(sizeof(struct x16file));
 	strcpy(f->path, path);
 
+#ifdef X16_HAVE_ZLIB
 	if(file_is_compressed_type(path)) {
 		char tmp_path[PATH_MAX];
 		if(!get_tmp_name(tmp_path, path, ".tmp")) {
@@ -148,7 +152,9 @@ x16open(const char *path, const char *attribs)
 			goto error;
 		}
 		f->size = total_read;
-	} else {
+	} else
+#endif
+	{
 		f->file = SDL_RWFromFile(path, attribs);
 		if(f->file == NULL) {
 			goto error;

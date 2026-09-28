@@ -1,0 +1,38 @@
+# Software Information
+display_name = "Commander X16 (x16emu)"
+authors = "Michael Steil|X16 Community"
+supported_extensions = "img|prg|bas|crt"
+corename = "x16emu"
+categories = "Emulator"
+license = "BSD 2-Clause"
+permissions = ""
+display_version = "r50"
+
+# Hardware Information
+manufacturer = "Commander X16"
+systemname = "Commander X16"
+systemid = "commander_x16"
+
+# Libretro Features
+supports_no_game = "true"
+savestate = "false"
+cheats = "false"
+input_descriptors = "true"
+memory_descriptors = "false"
+libretro_saves = "false"
+core_options = "false"
+load_subsystem = "false"
+hw_render = "false"
+needs_fullpath = "true"
+disk_control = "false"
+is_experimental = "true"
+
+# BIOS / Firmware
+firmware_count = 1
+firmware0_desc = "x16/rom.bin (Commander X16 KERNAL ROM)"
+firmware0_path = "x16/rom.bin"
+firmware0_opt = "false"
+
+notes = "(!) x16/rom.bin: the KERNAL ROM from an x16emu release (github.com/X16Community/x16-emulator/releases), put in the system directory.|(!) .img: SD card image, the KERNAL runs AUTOBOOT.X16 from it.|(!) .prg / .bas: loaded and run at startup and after every reset; files next to the content are reachable as device 8.|(!) Use Game Focus (Scroll Lock) to type on the X16 keyboard."
+
+description = "Commander X16 emulator (x16emu). Emulates the 65C02 (or 65C816), VERA video and PCM/PSG audio, the YM2151, the SD card and the SNES controller ports of The 8-Bit Guy's Commander X16."
