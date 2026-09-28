@@ -294,3 +294,23 @@ joystick_set_clock(bool value)
 		do_shift();
 	}
 }
+
+#include "state.h"
+
+void
+joystick_state(x16_state *s)
+{
+	STATE_VAR(s, Joystick_latch);
+	STATE_VAR(s, Joystick_data);
+	for (int i = 0; i < NUM_JOYSTICKS; ++i) {
+		uint16_t shift_mask = 0;
+		struct joystick_info *joy = Joystick_slots[i] >= 0 ? find_joystick_controller(Joystick_slots[i]) : NULL;
+		if (joy && s->mode == X16_STATE_SAVE) {
+			shift_mask = joy->shift_mask;
+		}
+		STATE_VAR(s, shift_mask);
+		if (joy && s->mode == X16_STATE_LOAD) {
+			joy->shift_mask = shift_mask;
+		}
+	}
+}

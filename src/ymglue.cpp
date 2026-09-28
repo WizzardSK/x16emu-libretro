@@ -1,6 +1,8 @@
 #include "ymglue.h"
 #include "ymfm_opm.h"
+#include "state.h"
 #include <cstdint>
+#include <vector>
 
 class ym2151_interface : public ymfm::ymfm_interface {
 	public:
@@ -83,6 +85,32 @@ class ym2151_interface : public ymfm::ymfm_interface {
 			return m_irq_status;
 		}
 
+		void state(x16_state *s) {
+			// ymfm serializes the chip into a byte vector of its own
+			std::vector<uint8_t> buf;
+			if (s->mode != X16_STATE_LOAD) {
+				ymfm::ymfm_saved_state saved(buf, true);
+				m_chip.save_restore(saved);
+			}
+			uint32_t len = (uint32_t)buf.size();
+			STATE_VAR(s, len);
+			if (s->mode == X16_STATE_LOAD) {
+				if (s->overflow || len > (1u << 20)) {
+					s->overflow = true;
+					return;
+				}
+				buf.resize(len);
+			}
+			state_raw(s, buf.data(), len);
+			if (s->mode == X16_STATE_LOAD && !s->overflow) {
+				ymfm::ymfm_saved_state saved(buf, false);
+				m_chip.save_restore(saved);
+			}
+			STATE_ARRAY(s, m_timers);
+			STATE_VAR(s, m_busy_timer);
+			STATE_VAR(s, m_irq_status);
+		}
+
 	private:
 		ymfm::ym2151 m_chip;
 		int32_t m_timers[2];
@@ -120,6 +148,10 @@ extern "C" {
 			return opm_iface.read_status();
 		else
 			return 0x00; // prevent programs that wait for the busy flag to clear from locking up (emulator compromise)
+	}
+
+	void YM_state(x16_state *s) {
+		opm_iface.state(s);
 	}
 
 	bool YM_irq() {

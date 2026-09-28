@@ -82,3 +82,16 @@ vera_spi_write(uint8_t reg, uint8_t value)
 			break;
 	}
 }
+
+#include "state.h"
+
+void
+vera_spi_state(x16_state *s)
+{
+	STATE_VAR(s, ss);
+	STATE_VAR(s, busy);
+	STATE_VAR(s, autotx);
+	STATE_VAR(s, sending_byte);
+	STATE_VAR(s, received_byte);
+	STATE_VAR(s, outcounter);
+}

@@ -180,3 +180,20 @@ pcm_render(int16_t *buf, unsigned num_samples)
 		*(buf++) = (int16_t)((int32_t)cur_r * volume_lut[ctrl & 0xF] / 64);
 	}
 }
+
+#include "state.h"
+
+void
+pcm_state(x16_state *s)
+{
+	STATE_ARRAY(s, fifo);
+	STATE_VAR(s, fifo_wridx);
+	STATE_VAR(s, fifo_rdidx);
+	STATE_VAR(s, fifo_cnt);
+	STATE_VAR(s, ctrl);
+	STATE_VAR(s, rate);
+	STATE_VAR(s, loop);
+	STATE_VAR(s, cur_l);
+	STATE_VAR(s, cur_r);
+	STATE_VAR(s, phase);
+}

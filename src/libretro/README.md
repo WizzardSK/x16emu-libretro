@@ -30,5 +30,36 @@ frontends), without SDL.
   mouse from the frontend's mouse.
 - Audio is output at the VERA rate, 48828 Hz; video is 640x480 at 59.52 Hz.
 
-Not supported yet: save states, core options (CPU speed, RAM size, keymap),
-NVRAM saving.
+## Core options
+
+| Option | Values | Applies |
+|---|---|---|
+| CPU | 65C02, 65C816 | on restart |
+| CPU Speed | 1-40 MHz (8 is the real machine) | on restart |
+| Banked RAM | 64 KB - 2 MB (512 KB standard) | on restart |
+| Set Clock from Host | on / off | on restart |
+| Keyboard Layout | the KERNAL's 28 layouts | on restart |
+| Mouse | on / off | at once |
+| Mid-line Effects | on / off | at once |
+| YM2151 IRQ | on / off | at once |
+
+## Saves
+
+- Save states cover the whole machine: CPU, RAM and banked RAM, cartridge
+  memory, VERA (VRAM, registers, FX, scanline position), PSG, PCM FIFO,
+  YM2151 (through ymfm's own state), VIAs, I2C/SMC/RTC, SD card SPI state,
+  SNES pad latches and the audio resampler. Loading a state and running
+  gives the same video and audio, bit for bit, as the original run
+  (`savestate_features = "deterministic"`). A state is refused when CPU,
+  RAM size or cartridge differ from the running machine. The contents of
+  the SD card image are not part of a state, as with a real disk.
+- The RTC's 64-byte NVRAM, where the KERNAL keeps its settings, is the
+  save RAM; the frontend stores it as the game's `.srm`.
+- HostFS no longer adds host time to the emulated clock in this build, so
+  a run does not depend on how fast the host serves files.
+
+## Builds
+
+`.github/workflows/libretro.yml` builds Linux (x86_64, aarch64), Windows,
+macOS (arm64, x86_64) and Android (`jni/`, arm64-v8a, armeabi-v7a, x86_64,
+x86) and publishes them in the `libretro-latest` release.

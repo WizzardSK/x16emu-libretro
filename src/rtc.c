@@ -257,3 +257,23 @@ rtc_write() {
 	i2c_data_pos = 0;
 }
 
+#include "state.h"
+
+void
+rtc_state(x16_state *s)
+{
+	STATE_ARRAY(s, nvram);
+	STATE_VAR(s, running);
+	STATE_VAR(s, vbaten);
+	STATE_VAR(s, h24);
+	STATE_VAR(s, clocks);
+	STATE_VAR(s, seconds);
+	STATE_VAR(s, minutes);
+	STATE_VAR(s, hours);
+	STATE_VAR(s, day_of_week);
+	STATE_VAR(s, day);
+	STATE_VAR(s, month);
+	STATE_VAR(s, year);
+	STATE_ARRAY(s, i2c_data);
+	STATE_VAR(s, i2c_data_pos);
+}

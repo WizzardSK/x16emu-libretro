@@ -306,3 +306,15 @@ void hookexternal(void *funcptr) {
 //  65C02 Cycle Count differences.
 //        ADC/SBC work differently in decimal mode.
 //        The wraparound fixes may not be required.
+
+#include "../state.h"
+
+void
+cpu_state(x16_state *s)
+{
+	STATE_VAR(s, regs);
+	STATE_VAR(s, clockticks6502);
+	STATE_VAR(s, clockgoal6502);
+	STATE_VAR(s, instructions);
+	STATE_VAR(s, waiting);
+}

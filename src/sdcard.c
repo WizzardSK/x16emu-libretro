@@ -394,3 +394,36 @@ sdcard_handle(uint8_t inbyte)
 	}
 	return outbyte;
 }
+
+#include "state.h"
+
+// The response being clocked out points into one of several static buffers;
+// a saved state carries a copy of its bytes instead of the pointer.
+static uint8_t restored_response[3 + 512 + 2];
+
+void
+sdcard_state(x16_state *s)
+{
+	STATE_ARRAY(s, rxbuf);
+	STATE_VAR(s, rxbuf_idx);
+	STATE_VAR(s, lba);
+	STATE_VAR(s, last_cmd);
+	STATE_VAR(s, is_acmd);
+	STATE_VAR(s, is_idle);
+	STATE_VAR(s, is_initialized);
+	STATE_VAR(s, ongoing_multiblock_read);
+	STATE_VAR(s, response_length);
+	STATE_VAR(s, response_counter);
+	STATE_VAR(s, selected);
+
+	bool has_response = response != NULL;
+	STATE_VAR(s, has_response);
+	if (s->mode == X16_STATE_SAVE && response) {
+		size_t n = (size_t)response_length < sizeof(restored_response) ? (size_t)response_length : sizeof(restored_response);
+		memcpy(restored_response, response, n);
+	}
+	STATE_ARRAY(s, restored_response);
+	if (s->mode == X16_STATE_LOAD) {
+		response = has_response ? restored_response : NULL;
+	}
+}

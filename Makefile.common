@@ -1,0 +1,37 @@
+# Sources of the libretro core, shared by Makefile.libretro and jni/Android.mk
+CORE_DIR ?= .
+SRC := $(CORE_DIR)/src
+
+SOURCES_C := \
+	$(SRC)/cpu/fake6502.c \
+	$(SRC)/memory.c \
+	$(SRC)/disasm.c \
+	$(SRC)/video.c \
+	$(SRC)/i2c.c \
+	$(SRC)/smc.c \
+	$(SRC)/rtc.c \
+	$(SRC)/via.c \
+	$(SRC)/serial.c \
+	$(SRC)/ieee.c \
+	$(SRC)/vera_spi.c \
+	$(SRC)/audio.c \
+	$(SRC)/vera_pcm.c \
+	$(SRC)/vera_psg.c \
+	$(SRC)/sdcard.c \
+	$(SRC)/main.c \
+	$(SRC)/joystick.c \
+	$(SRC)/keyboard.c \
+	$(SRC)/timing.c \
+	$(SRC)/wav_recorder.c \
+	$(SRC)/testbench.c \
+	$(SRC)/files.c \
+	$(SRC)/cartridge.c \
+	$(SRC)/iso_8859_15.c \
+	$(SRC)/midi.c \
+	$(SRC)/libretro/libretro.c \
+	$(SRC)/libretro/debugger_stub.c
+SOURCES_CXX := \
+	$(SRC)/ymglue.cpp \
+	$(SRC)/extern/ymfm/src/ymfm_opm.cpp
+
+INCFLAGS := -I$(SRC)/libretro/shim -I$(SRC) -I$(SRC)/extern/include -I$(SRC)/extern/ymfm/src -I$(SRC)/libretro/fallback

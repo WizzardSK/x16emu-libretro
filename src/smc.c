@@ -174,3 +174,16 @@ smc_write() {
 	i2c_data_pos = 0;
 }
 
+#include "state.h"
+
+void
+smc_state(x16_state *s)
+{
+	STATE_VAR(s, default_read_op);
+	STATE_VAR(s, default_read_state);
+	STATE_VAR(s, activity_led);
+	STATE_VAR(s, mse_count);
+	STATE_ARRAY(s, i2c_data);
+	STATE_VAR(s, i2c_data_pos);
+	STATE_VAR(s, smc_requested_reset);
+}

@@ -1566,9 +1566,16 @@ handle_ieee_intercept()
 	if (handled) {
 		// Add the number CPU cycles equivalent to the amount of time that the operation actually took
 		// to prevent the emu from warping after a hostfs load
+#ifndef __LIBRETRO__
+		// (Not in the libretro core: the frontend paces frames, and host
+		// time must not leak into the emulation, or save states, rewind and
+		// netplay stop being deterministic.)
 		uint64_t perf_diff = SDL_GetPerformanceCounter() - base_ticks;
 		uint32_t missed_ticks = (uint64_t)(perf_diff * 1000000ULL * MHZ) / SDL_GetPerformanceFrequency();
 		clockticks6502 += missed_ticks;
+#else
+		(void)base_ticks;
+#endif
 		if (s >= 0) {
 			if (!set_kernal_status(s)) {
 				printf("Warning: Could not set STATUS!\n");

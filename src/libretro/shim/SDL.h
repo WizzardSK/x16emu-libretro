@@ -74,16 +74,11 @@ static inline int SDL_RWclose(SDL_RWops *rw) { int r = fclose(rw->fp); free(rw);
 static inline size_t SDL_WriteU8(SDL_RWops *rw, Uint8 v) { return fwrite(&v, 1, 1, rw->fp); }
 
 /* ---- Timers ------------------------------------------------------------- */
-static inline Uint64 SDL_GetPerformanceFrequency(void) { return 1000000000ULL; }
-static inline Uint64 SDL_GetPerformanceCounter(void)
-{
-	// timespec_get is plain C11: some sources define _POSIX_C_SOURCE 1,
-	// which hides clock_gettime's CLOCK_MONOTONIC
-	struct timespec ts;
-	timespec_get(&ts, TIME_UTC);
-	return (Uint64)ts.tv_sec * 1000000000ULL + (Uint64)ts.tv_nsec;
-}
-static inline Uint32 SDL_GetTicks(void) { return (Uint32)(SDL_GetPerformanceCounter() / 1000000ULL); }
+// Only used for statistics in the libretro build (frame pacing is the
+// frontend's), so plain C clock() is enough and builds everywhere
+static inline Uint64 SDL_GetPerformanceFrequency(void) { return (Uint64)CLOCKS_PER_SEC; }
+static inline Uint64 SDL_GetPerformanceCounter(void) { return (Uint64)clock(); }
+static inline Uint32 SDL_GetTicks(void) { return (Uint32)((Uint64)clock() * 1000 / CLOCKS_PER_SEC); }
 
 /* ---- Keyboard ----------------------------------------------------------- */
 typedef Sint32 SDL_Keycode;

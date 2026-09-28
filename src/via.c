@@ -360,3 +360,11 @@ via2_irq()
 {
 	return (via[1].registers[13] & via[1].registers[14]) != 0;
 }
+
+#include "state.h"
+
+void
+via_state(x16_state *s)
+{
+	STATE_ARRAY(s, via);
+}

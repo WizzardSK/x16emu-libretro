@@ -484,3 +484,29 @@ audio_usage(void)
 	exit(1);
 }
 #endif
+
+#include "state.h"
+
+void
+audio_state(x16_state *s)
+{
+	STATE_VAR(s, vera_samp_pos_rd);
+	STATE_VAR(s, vera_samp_pos_wr);
+	STATE_VAR(s, vera_samp_pos_hd);
+	STATE_VAR(s, ym_samp_pos_rd);
+	STATE_VAR(s, ym_samp_pos_wr);
+	STATE_VAR(s, ym_samp_pos_hd);
+	STATE_VAR(s, fs_samp_pos_rd);
+	STATE_VAR(s, fs_samp_pos_wr);
+	STATE_VAR(s, fs_samp_pos_hd);
+	STATE_VAR(s, limiter_amp);
+	STATE_ARRAY(s, psg_buf);
+	STATE_ARRAY(s, pcm_buf);
+	STATE_ARRAY(s, ym_buf);
+	STATE_ARRAY(s, fs_buf);
+	if (s->mode == X16_STATE_LOAD) {
+		// Drop what was queued for the host before the load
+		rdidx = wridx;
+		buffer_written = 0;
+	}
+}

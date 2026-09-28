@@ -8,8 +8,6 @@
 # __LIBRETRO__.
 
 TARGET_NAME := x16emu
-HAVE_ZLIB ?= 1
-
 ifeq ($(platform),)
   platform = unix
   ifeq ($(shell uname -s),)
@@ -28,6 +26,10 @@ ifeq ($(platform),osx)
 else ifeq ($(platform),win)
   TARGET := $(TARGET_NAME)_libretro.dll
   SHARED := -shared -static-libgcc -static-libstdc++ -Wl,--version-script=src/libretro/link.T
+  # winpthreads for midi.c, linked in so the DLL needs nothing beside it
+  LIBS += -Wl,-Bstatic -lpthread -Wl,-Bdynamic
+  # MinGW usually has no zlib; gzip-compressed SD images are an extra
+  HAVE_ZLIB ?= 0
 else
   TARGET := $(TARGET_NAME)_libretro.so
   fpic := -fPIC
@@ -35,38 +37,10 @@ else
   LIBS += -lm -ldl -lpthread
 endif
 
-SRC := src
-SOURCES_C := \
-	$(SRC)/cpu/fake6502.c \
-	$(SRC)/memory.c \
-	$(SRC)/disasm.c \
-	$(SRC)/video.c \
-	$(SRC)/i2c.c \
-	$(SRC)/smc.c \
-	$(SRC)/rtc.c \
-	$(SRC)/via.c \
-	$(SRC)/serial.c \
-	$(SRC)/ieee.c \
-	$(SRC)/vera_spi.c \
-	$(SRC)/audio.c \
-	$(SRC)/vera_pcm.c \
-	$(SRC)/vera_psg.c \
-	$(SRC)/sdcard.c \
-	$(SRC)/main.c \
-	$(SRC)/joystick.c \
-	$(SRC)/keyboard.c \
-	$(SRC)/timing.c \
-	$(SRC)/wav_recorder.c \
-	$(SRC)/testbench.c \
-	$(SRC)/files.c \
-	$(SRC)/cartridge.c \
-	$(SRC)/iso_8859_15.c \
-	$(SRC)/midi.c \
-	$(SRC)/libretro/libretro.c \
-	$(SRC)/libretro/debugger_stub.c
-SOURCES_CXX := \
-	$(SRC)/ymglue.cpp \
-	$(SRC)/extern/ymfm/src/ymfm_opm.cpp
+HAVE_ZLIB ?= 1
+
+CORE_DIR := .
+include Makefile.common
 
 OBJECTS := $(SOURCES_C:.c=.lo) $(SOURCES_CXX:.cpp=.lo)
 
@@ -79,7 +53,7 @@ ifeq ($(HAVE_ZLIB),1)
   LIBS += -lz
 endif
 
-INCFLAGS := -I$(SRC)/libretro/shim -I$(SRC) -I$(SRC)/extern/include -I$(SRC)/extern/ymfm/src -I$(GENERATED)
+INCFLAGS := -I$(GENERATED) $(INCFLAGS)
 ifeq ($(DEBUG),1)
   OPTFLAGS := -O0 -g
 else

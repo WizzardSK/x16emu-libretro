@@ -124,3 +124,12 @@ psg_render(int16_t *buf, unsigned num_samples)
 		buf += 2;
 	}
 }
+
+#include "state.h"
+
+void
+psg_state(x16_state *s)
+{
+	STATE_ARRAY(s, channels);
+	STATE_VAR(s, noise_state);
+}

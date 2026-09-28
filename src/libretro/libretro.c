@@ -27,6 +27,7 @@
 #include "../timing.h"
 #include "../video.h"
 #include "../wav_recorder.h"
+#include "../state.h"
 #include "../cpu/fake6502.h"
 #include "../version.h"
 
@@ -38,6 +39,12 @@ extern char paste_text_data[65536];
 extern char *cartridge_path;
 extern bool headless;
 extern bool prg_done;
+extern char *keymaps[];
+extern bool set_system_time;
+extern bool enable_midline;
+extern bool ym2151_irq_support;
+extern uint8_t keymap;
+extern int instruction_counter;
 void *emulator_loop(void *param);
 void machine_reset(void);
 void main_shutdown(void);
@@ -58,6 +65,144 @@ static char content_path[PATH_MAX];
 static bool game_loaded;
 static bool supports_bitmasks;
 static int16_t audio_out[4096 * 2];
+static bool mouse_enabled = true;
+static size_t state_size;
+
+#define NUM_KEYMAPS 28
+
+// ---- Core options -------------------------------------------------------------
+
+static struct retro_core_option_v2_category option_cats[] = {
+	{ "system", "System", "CPU, memory and clock of the emulated machine." },
+	{ "input", "Input", "Keyboard layout and mouse." },
+	{ "video_audio", "Video & Audio", "Accuracy settings for VERA and the YM2151." },
+	{ NULL, NULL, NULL },
+};
+
+static struct retro_core_option_v2_definition option_defs[] = {
+	{ "x16_cpu_type", "CPU (Restart)", "CPU", "65C02 as shipped, or the 65C816 upgrade.", NULL, "system",
+		{ { "65C02", NULL }, { "65C816", NULL }, { NULL, NULL } }, "65C02" },
+	{ "x16_cpu_speed", "CPU Speed (Restart)", "CPU Speed", "8 MHz is the real machine; faster clocks run software faster.", NULL, "system",
+		{ { "8", "8 MHz" }, { "1", "1 MHz" }, { "2", "2 MHz" }, { "4", "4 MHz" }, { "10", "10 MHz" }, { "12", "12 MHz" },
+		  { "16", "16 MHz" }, { "20", "20 MHz" }, { "32", "32 MHz" }, { "40", "40 MHz" }, { NULL, NULL } }, "8" },
+	{ "x16_ram_size", "Banked RAM (Restart)", "Banked RAM", "High RAM at $A000-$BFFF. 512 KB is the standard machine, 2 MB the maximum.", NULL, "system",
+		{ { "512", "512 KB" }, { "64", "64 KB" }, { "128", "128 KB" }, { "256", "256 KB" }, { "1024", "1 MB" },
+		  { "1536", "1.5 MB" }, { "2048", "2 MB" }, { NULL, NULL } }, "512" },
+	{ "x16_rtc_host_time", "Set Clock from Host (Restart)", "Set Clock from Host", "Start the real-time clock at the host's local time instead of stopped at 2000-01-01.", NULL, "system",
+		{ { "enabled", NULL }, { "disabled", NULL }, { NULL, NULL } }, "enabled" },
+	{ "x16_keymap", "Keyboard Layout (Restart)", "Keyboard Layout", "The layout the KERNAL uses to read the keyboard; match it to the host keyboard.", NULL, "input",
+		{ { NULL, NULL } }, "en-us" },
+	{ "x16_mouse", "Mouse", NULL, "Pass the host mouse to the X16.", NULL, "input",
+		{ { "enabled", NULL }, { "disabled", NULL }, { NULL, NULL } }, "enabled" },
+	{ "x16_midline", "Mid-line Effects", NULL, "Emulate VERA register changes in the middle of a scanline. More accurate, slower.", NULL, "video_audio",
+		{ { "disabled", NULL }, { "enabled", NULL }, { NULL, NULL } }, "disabled" },
+	{ "x16_ym2151_irq", "YM2151 IRQ", NULL, "Deliver YM2151 timer interrupts to the CPU. Only needed by software that uses them; costs speed.", NULL, "video_audio",
+		{ { "disabled", NULL }, { "enabled", NULL }, { NULL, NULL } }, "disabled" },
+	{ NULL, NULL, NULL, NULL, NULL, NULL, { { NULL, NULL } }, NULL },
+};
+
+static void
+set_core_options(void)
+{
+	// Keyboard layouts come from the table the KERNAL numbers them by
+	for (int i = 0; option_defs[i].key; i++) {
+		if (!strcmp(option_defs[i].key, "x16_keymap")) {
+			for (int k = 0; k < NUM_KEYMAPS && k < RETRO_NUM_CORE_OPTION_VALUES_MAX - 1; k++) {
+				option_defs[i].values[k].value = keymaps[k];
+				option_defs[i].values[k].label = NULL;
+			}
+		}
+	}
+
+	unsigned version = 0;
+	if (environ_cb(RETRO_ENVIRONMENT_GET_CORE_OPTIONS_VERSION, &version) && version >= 2) {
+		struct retro_core_options_v2 opts = { option_cats, option_defs };
+		environ_cb(RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2, &opts);
+		return;
+	}
+
+	// Old frontends: "Description; default|other|..."
+	static struct retro_variable vars[sizeof(option_defs) / sizeof(option_defs[0])];
+	static char descs[sizeof(option_defs) / sizeof(option_defs[0])][1024];
+	int n = 0;
+	for (int i = 0; option_defs[i].key; i++, n++) {
+		const struct retro_core_option_v2_definition *d = &option_defs[i];
+		char *out = descs[i];
+		size_t len = snprintf(out, sizeof(descs[i]), "%s; %s", d->desc, d->default_value);
+		for (int v = 0; d->values[v].value && len < sizeof(descs[i]); v++) {
+			if (strcmp(d->values[v].value, d->default_value)) {
+				len += snprintf(out + len, sizeof(descs[i]) - len, "|%s", d->values[v].value);
+			}
+		}
+		vars[n].key = d->key;
+		vars[n].value = out;
+	}
+	vars[n].key = NULL;
+	vars[n].value = NULL;
+	environ_cb(RETRO_ENVIRONMENT_SET_VARIABLES, vars);
+}
+
+static const char *
+get_option(const char *key)
+{
+	struct retro_variable var = { key, NULL };
+	return environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) ? var.value : NULL;
+}
+
+// Options that take effect at once
+static void
+apply_runtime_options(void)
+{
+	const char *v;
+	if ((v = get_option("x16_mouse"))) {
+		mouse_enabled = strcmp(v, "disabled") != 0;
+	}
+	if ((v = get_option("x16_midline"))) {
+		enable_midline = !strcmp(v, "enabled");
+	}
+	if ((v = get_option("x16_ym2151_irq"))) {
+		ym2151_irq_support = !strcmp(v, "enabled");
+	}
+}
+
+// Options read when a game is loaded (the machine is built with them)
+static void
+apply_boot_options(void)
+{
+	const char *v;
+	regs.is65c816 = (v = get_option("x16_cpu_type")) && !strcmp(v, "65C816");
+	is_gen2 = false;
+
+	MHZ = 8;
+	if ((v = get_option("x16_cpu_speed"))) {
+		int mhz = atoi(v);
+		if (mhz >= 1 && mhz <= 40) {
+			MHZ = (uint8_t)mhz;
+		}
+	}
+
+	num_banks = 1;
+	num_ram_banks = 64;
+	if ((v = get_option("x16_ram_size"))) {
+		int kb = atoi(v);
+		if (kb >= 8 && kb <= 2048 && (kb & 7) == 0) {
+			num_ram_banks = kb / 8;
+		}
+	}
+
+	set_system_time = !(v = get_option("x16_rtc_host_time")) || strcmp(v, "disabled") != 0;
+
+	keymap = 0;
+	if ((v = get_option("x16_keymap"))) {
+		for (int k = 0; k < NUM_KEYMAPS; k++) {
+			if (!strcmp(v, keymaps[k])) {
+				keymap = k;
+			}
+		}
+	}
+
+	apply_runtime_options();
+}
 
 static void
 fallback_log(enum retro_log_level level, const char *fmt, ...)
@@ -175,6 +320,10 @@ update_input(void)
 		joystick_libretro_set(port, pressed & 0x0fff);
 	}
 
+	if (!mouse_enabled) {
+		return;
+	}
+
 	static bool buttons[3];
 	static const unsigned ids[3] = {RETRO_DEVICE_ID_MOUSE_LEFT, RETRO_DEVICE_ID_MOUSE_RIGHT, RETRO_DEVICE_ID_MOUSE_MIDDLE};
 	bool changed = false;
@@ -255,6 +404,8 @@ retro_set_environment(retro_environment_t cb)
 		{ pads, 1 }, { pads, 1 }, { pads, 1 }, { pads, 1 }, { NULL, 0 },
 	};
 	cb(RETRO_ENVIRONMENT_SET_CONTROLLER_INFO, (void *)ports);
+
+	set_core_options();
 }
 
 void retro_set_video_refresh(retro_video_refresh_t cb) { video_cb = cb; }
@@ -287,6 +438,7 @@ retro_deinit(void)
 }
 
 static bool has_extension(const char *path, const char *ext);
+static void serialize_machine(x16_state *s);
 
 // Queue the PRG or BASIC program so the KERNAL loads and runs it once BASIC
 // is up, after power-on and after every reset
@@ -382,6 +534,8 @@ retro_load_game(const struct retro_game_info *game)
 		return false;
 	}
 
+	apply_boot_options();
+
 	content_path[0] = 0;
 	headless = false;
 	using_hostfs = true;
@@ -436,9 +590,13 @@ retro_load_game(const struct retro_game_info *game)
 	wav_recorder_set_path(NULL);
 	memory_init();
 	joystick_init();
-	rtc_init(false);
+	rtc_init(set_system_time);
 	machine_reset();
 	timing_init();
+
+	x16_state measure = { X16_STATE_MEASURE };
+	serialize_machine(&measure);
+	state_size = measure.pos;
 
 	game_loaded = true;
 	return true;
@@ -489,6 +647,11 @@ retro_reset(void)
 void
 retro_run(void)
 {
+	bool updated = false;
+	if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE, &updated) && updated) {
+		apply_runtime_options();
+	}
+
 	update_input();
 
 	emulator_loop(NULL);
@@ -503,21 +666,106 @@ retro_run(void)
 
 unsigned retro_get_region(void) { return RETRO_REGION_NTSC; }
 
-// Save states are not supported yet
-size_t retro_serialize_size(void) { return 0; }
-bool retro_serialize(void *data, size_t size) { (void)data; (void)size; return false; }
-bool retro_unserialize(const void *data, size_t size) { (void)data; (void)size; return false; }
+// ---- Save states ----------------------------------------------------------------
+// Version 1: header, then every module's state in a fixed order
+
+#define X16_STATE_MAGIC 0x53363158u   // "X16S"
+#define X16_STATE_VERSION 1u
+
+static void
+serialize_header(x16_state *s)
+{
+	uint32_t magic = X16_STATE_MAGIC, version = X16_STATE_VERSION;
+	uint16_t ram_banks = num_ram_banks, banks = num_banks;
+	uint8_t cpu816 = regs.is65c816, cart = CART != NULL;
+	STATE_VAR(s, magic);
+	STATE_VAR(s, version);
+	STATE_VAR(s, ram_banks);
+	STATE_VAR(s, banks);
+	STATE_VAR(s, cpu816);
+	STATE_VAR(s, cart);
+}
+
+static void
+serialize_machine(x16_state *s)
+{
+	serialize_header(s);
+	cpu_state(s);
+	memory_state(s);
+	video_state(s);
+	via_state(s);
+	i2c_state(s);
+	smc_state(s);
+	rtc_state(s);
+	vera_spi_state(s);
+	pcm_state(s);
+	psg_state(s);
+	sdcard_state(s);
+	serial_state(s);
+	joystick_state(s);
+	audio_state(s);
+	YM_state(s);
+	STATE_VAR(s, instruction_counter);
+	STATE_VAR(s, MHZ);
+}
+
+size_t
+retro_serialize_size(void)
+{
+	return state_size;
+}
+
+bool
+retro_serialize(void *data, size_t size)
+{
+	if (!game_loaded || size < state_size) {
+		return false;
+	}
+	x16_state s = { X16_STATE_SAVE, (uint8_t *)data, size };
+	serialize_machine(&s);
+	return !s.overflow;
+}
+
+bool
+retro_unserialize(const void *data, size_t size)
+{
+	if (!game_loaded || size < state_size) {
+		return false;
+	}
+	// Check the header against this machine before touching anything
+	x16_state check = { X16_STATE_SAVE, (uint8_t *)malloc(state_size), state_size };
+	serialize_header(&check);
+	bool same = !memcmp(check.data, data, check.pos);
+	free(check.data);
+	if (!same) {
+		log_cb(RETRO_LOG_ERROR, "[x16] save state is from a different machine configuration (CPU, RAM, cartridge)\n");
+		return false;
+	}
+	x16_state s = { X16_STATE_LOAD, (uint8_t *)data, size };
+	serialize_machine(&s);
+	return !s.overflow;
+}
 void retro_cheat_reset(void) {}
 void retro_cheat_set(unsigned index, bool enabled, const char *code) { (void)index; (void)enabled; (void)code; }
 
+// The RTC's battery-backed NVRAM (KERNAL settings) is the save RAM, which
+// the frontend keeps in a .srm file next to each game's saves
 void *
 retro_get_memory_data(unsigned id)
 {
-	return id == RETRO_MEMORY_SYSTEM_RAM ? RAM : NULL;
+	switch (id) {
+		case RETRO_MEMORY_SAVE_RAM: return nvram;
+		case RETRO_MEMORY_SYSTEM_RAM: return RAM;
+		default: return NULL;
+	}
 }
 
 size_t
 retro_get_memory_size(unsigned id)
 {
-	return id == RETRO_MEMORY_SYSTEM_RAM ? 0xa000 : 0;
+	switch (id) {
+		case RETRO_MEMORY_SAVE_RAM: return sizeof(nvram);
+		case RETRO_MEMORY_SYSTEM_RAM: return RAM ? 0xa000 : 0;
+		default: return 0;
+	}
 }

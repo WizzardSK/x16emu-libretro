@@ -182,6 +182,7 @@ x16close(struct x16file *f)
 
 	SDL_RWclose(f->file);
 
+#ifdef X16_HAVE_ZLIB
 	if(file_is_compressed_type(f->path)) {
 		char tmp_path[PATH_MAX];
 		if(!get_tmp_name(tmp_path, f->path, ".tmp")) {
@@ -241,6 +242,7 @@ x16close(struct x16file *f)
 		unlink(tmp_path);
 	}
 tmp_path_error:
+#endif
 	if(f == open_files) {
 		open_files = f->next;
 	} else {

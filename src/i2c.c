@@ -17,6 +17,7 @@
 #define STATE_STOP -1
 
 i2c_port_t i2c_port;
+static i2c_port_t old_i2c_port;
 
 static int state = STATE_STOP;
 static bool read_mode = false;
@@ -97,7 +98,6 @@ i2c_write(uint8_t device) {
 void
 i2c_step()
 {
-	static i2c_port_t old_i2c_port;
 
 	if (old_i2c_port.clk_in != i2c_port.clk_in || old_i2c_port.data_in != i2c_port.data_in) {
 #if LOG_LEVEL >= 5
@@ -402,4 +402,29 @@ mouse_set_device_id(uint8_t d) {
 			break;
 	}
 	i2c_mse_buffer_flush();
+}
+
+#include "state.h"
+
+void
+i2c_state(x16_state *s)
+{
+	STATE_VAR(s, state);
+	STATE_VAR(s, read_mode);
+	STATE_VAR(s, value);
+	STATE_VAR(s, count);
+	STATE_VAR(s, device);
+	STATE_VAR(s, i2c_port);
+	STATE_VAR(s, old_i2c_port);
+	STATE_ARRAY(s, kbd_buffer);
+	STATE_VAR(s, kbd_head);
+	STATE_VAR(s, kbd_tail);
+	STATE_ARRAY(s, mse_buffer);
+	STATE_VAR(s, mse_head);
+	STATE_VAR(s, mse_tail);
+	STATE_VAR(s, buttons);
+	STATE_VAR(s, mouse_diff_x);
+	STATE_VAR(s, mouse_diff_y);
+	STATE_VAR(s, wheel);
+	STATE_VAR(s, mouse_device_id);
 }

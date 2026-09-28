@@ -7,6 +7,11 @@
 [![License: BSD-Clause](https://img.shields.io/github/license/x16community/x16-emulator)](./LICENSE)
 [![Contributors](https://img.shields.io/github/contributors/x16community/x16-emulator.svg)](https://github.com/x16community/x16-emulator/graphs/contributors)
 
+> **libretro core:** this fork also builds x16emu as a libretro core for RetroArch
+> (`make -f Makefile.libretro`); see [src/libretro/README.md](src/libretro/README.md).
+> Prebuilt cores for Linux, Windows, macOS and Android are in the
+> [libretro-latest release](../../releases/tag/libretro-latest).
+
 This is an emulator for the Commander X16 computer system. It only depends on SDL2 and should compile on all modern operating systems.
 
 Features

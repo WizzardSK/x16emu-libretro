@@ -588,3 +588,20 @@ emu_read(uint8_t reg, bool debugOn)
 	if (!debugOn) printf("WARN: Invalid register %x\n", DEVICE_EMULATOR + reg);
 	return -1;
 }
+
+#include "state.h"
+
+void
+memory_state(x16_state *s)
+{
+	STATE_VAR(s, ram_bank);
+	STATE_VAR(s, rom_bank);
+	STATE_VAR(s, addr_ym);
+	STATE_VAR(s, clock_snap);
+	STATE_VAR(s, clock_base);
+	state_raw(s, RAM, RAM_SIZE);
+	state_raw(s, BRAM, BRAM_SIZE);
+	if (CART) {
+		state_raw(s, CART, CART_SIZE);
+	}
+}

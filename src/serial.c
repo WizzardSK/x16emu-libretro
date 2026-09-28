@@ -251,3 +251,20 @@ serial_step(int clocks)
 	old_data = serial_port_read_data();
 }
 
+#include "state.h"
+
+void
+serial_state(x16_state *s)
+{
+	STATE_VAR(s, serial_port);
+	STATE_VAR(s, state);
+	STATE_VAR(s, valid);
+	STATE_VAR(s, bit);
+	STATE_VAR(s, byte);
+	STATE_VAR(s, listening);
+	STATE_VAR(s, talking);
+	STATE_VAR(s, during_atn);
+	STATE_VAR(s, eoi);
+	STATE_VAR(s, fnf);
+	STATE_VAR(s, clocks_since_last_change);
+}

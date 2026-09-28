@@ -1,0 +1,101 @@
+name: Build libretro core
+
+on:
+  push:
+    branches: [libretro]
+    tags: ['libretro-*']
+  pull_request:
+    branches: [libretro]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-x86_64
+            os: ubuntu-22.04
+            make: make -f Makefile.libretro -j4
+            out: x16emu_libretro.so
+          - name: linux-aarch64
+            os: ubuntu-22.04-arm
+            make: make -f Makefile.libretro -j4
+            out: x16emu_libretro.so
+          - name: windows-x86_64
+            os: ubuntu-22.04
+            deps: sudo apt-get update && sudo apt-get install -y gcc-mingw-w64-x86-64 g++-mingw-w64-x86-64
+            make: make -f Makefile.libretro -j4 platform=win CC=x86_64-w64-mingw32-gcc CXX=x86_64-w64-mingw32-g++
+            out: x16emu_libretro.dll
+          - name: macos-arm64
+            os: macos-14
+            make: make -f Makefile.libretro -j4 platform=osx
+            out: x16emu_libretro.dylib
+          - name: macos-x86_64
+            os: macos-13
+            make: make -f Makefile.libretro -j4 platform=osx
+            out: x16emu_libretro.dylib
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        if: matrix.deps
+        run: ${{ matrix.deps }}
+      - name: Build
+        run: ${{ matrix.make }}
+      - name: Package
+        run: |
+          mkdir -p dist
+          cp ${{ matrix.out }} x16emu_libretro.info dist/
+          cd dist && zip -9 ../x16emu_libretro-${{ matrix.name }}.zip *
+      - uses: actions/upload-artifact@v4
+        with:
+          name: x16emu_libretro-${{ matrix.name }}
+          path: x16emu_libretro-${{ matrix.name }}.zip
+
+  android:
+    name: android
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: |
+          "$ANDROID_NDK_LATEST_HOME/ndk-build" -j4 NDK_PROJECT_PATH=. \
+            APP_BUILD_SCRIPT=jni/Android.mk NDK_APPLICATION_MK=jni/Application.mk
+      - name: Package
+        run: |
+          mkdir -p dist
+          for abi in libs/*; do
+            cp "$abi/libretro.so" "dist/x16emu_libretro_android-$(basename "$abi").so"
+          done
+          cp x16emu_libretro.info dist/
+          cd dist && zip -9 ../x16emu_libretro-android.zip *
+      - uses: actions/upload-artifact@v4
+        with:
+          name: x16emu_libretro-android
+          path: x16emu_libretro-android.zip
+
+  # Every push to the libretro branch refreshes the "libretro-latest" release,
+  # so the cores can be downloaded from a stable URL
+  release:
+    needs: [build, android]
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'libretro-latest' }}
+          name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'libretro core (latest build)' }}
+          prerelease: ${{ !startsWith(github.ref, 'refs/tags/') }}
+          body: |
+            Commander X16 libretro core (x16emu), built from `${{ github.sha }}`.
+            Put the core in RetroArch's cores folder and `rom.bin` from an x16emu release in `system/x16/rom.bin`.
+          files: artifacts/*.zip

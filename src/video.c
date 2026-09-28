@@ -96,7 +96,9 @@ static SDL_Window *window;
 static SDL_Renderer *renderer;
 static SDL_Texture *sdlTexture;
 #endif
+#ifndef __LIBRETRO__
 static bool is_fullscreen = false;
+#endif
 bool mouse_grabbed = false;
 bool no_keyboard_capture = false;
 bool kernal_mouse_enabled = false;
@@ -449,6 +451,13 @@ struct video_layer_properties
 
 #define NUM_LAYERS 2
 struct video_layer_properties layer_properties[NUM_LAYERS];
+
+// render_line() position within the current line (file scope so a saved
+// state carries it)
+static uint16_t y_prev;
+static uint16_t s_pos_x_p;
+static uint32_t eff_y_fp; // 16.16 fixed point
+static uint32_t eff_x_fp; // 16.16 fixed point
 struct video_layer_properties prev_layer_properties[2][NUM_LAYERS];
 
 static int
@@ -1040,10 +1049,6 @@ static uint8_t calculate_line_col_index(uint8_t spr_zindex, uint8_t spr_col_inde
 static void
 render_line(uint16_t y, float scan_pos_x)
 {
-	static uint16_t y_prev;
-	static uint16_t s_pos_x_p;
-	static uint32_t eff_y_fp; // 16.16 fixed point
-	static uint32_t eff_x_fp; // 16.16 fixed point
 
 	static uint8_t col_line[SCREEN_WIDTH];
 
@@ -1360,9 +1365,11 @@ video_save(SDL_RWops *f)
 bool
 video_update()
 {
+#ifndef __LIBRETRO__
 	static bool cmd_down = false;
 	static bool alt_down = false;
 	bool mouse_changed = false;
+#endif
 
 	// for activity LED, overlay red 8x4 square into top right of framebuffer
 	// for progressive modes, draw LED only on even scanlines
@@ -2483,4 +2490,76 @@ stop6502(uint16_t address, uint8_t bank) {
 		};
 #endif
 	}
+}
+
+#include "state.h"
+
+void
+video_state(x16_state *s)
+{
+	STATE_ARRAY(s, video_ram);
+	STATE_ARRAY(s, palette);
+	STATE_ARRAY(s, sprite_data);
+	STATE_ARRAY(s, io_addr);
+	STATE_ARRAY(s, io_rddata);
+	STATE_ARRAY(s, io_inc);
+	STATE_VAR(s, io_addrsel);
+	STATE_VAR(s, io_dcsel);
+	STATE_VAR(s, ien);
+	STATE_VAR(s, isr);
+	STATE_VAR(s, irq_line);
+	STATE_ARRAY(s, reg_layer);
+	STATE_ARRAY(s, reg_composer);
+	STATE_ARRAY(s, prev_reg_composer);
+	STATE_ARRAY(s, layer_line);
+	STATE_ARRAY(s, sprite_line_col);
+	STATE_ARRAY(s, sprite_line_z);
+	STATE_ARRAY(s, sprite_line_mask);
+	STATE_VAR(s, sprite_line_collisions);
+	STATE_ARRAY(s, layer_line_enable);
+	STATE_ARRAY(s, old_layer_line_enable);
+	STATE_VAR(s, old_sprite_line_enable);
+	STATE_VAR(s, sprite_line_enable);
+	STATE_VAR(s, fx_addr1_mode);
+	STATE_VAR(s, fx_x_pixel_increment);
+	STATE_VAR(s, fx_y_pixel_increment);
+	STATE_VAR(s, fx_x_pixel_position);
+	STATE_VAR(s, fx_y_pixel_position);
+	STATE_VAR(s, fx_poly_fill_length);
+	STATE_VAR(s, fx_affine_tile_base);
+	STATE_VAR(s, fx_affine_map_base);
+	STATE_VAR(s, fx_affine_map_size);
+	STATE_VAR(s, fx_4bit_mode);
+	STATE_VAR(s, fx_16bit_hop);
+	STATE_VAR(s, fx_cache_byte_cycling);
+	STATE_VAR(s, fx_cache_fill);
+	STATE_VAR(s, fx_cache_write);
+	STATE_VAR(s, fx_trans_writes);
+	STATE_VAR(s, fx_2bit_poly);
+	STATE_VAR(s, fx_2bit_poking);
+	STATE_VAR(s, fx_cache_increment_mode);
+	STATE_VAR(s, fx_cache_nibble_index);
+	STATE_VAR(s, fx_cache_byte_index);
+	STATE_VAR(s, fx_multiplier);
+	STATE_VAR(s, fx_subtract);
+	STATE_VAR(s, fx_affine_clip);
+	STATE_VAR(s, fx_16bit_hop_align);
+	STATE_ARRAY(s, fx_nibble_bit);
+	STATE_ARRAY(s, fx_nibble_incr);
+	STATE_ARRAY(s, fx_cache);
+	STATE_VAR(s, fx_mult_accumulator);
+	STATE_VAR(s, vga_scan_pos_x);
+	STATE_VAR(s, vga_scan_pos_y);
+	STATE_VAR(s, ntsc_half_cnt);
+	STATE_VAR(s, ntsc_scan_pos_y);
+	STATE_VAR(s, frame_count);
+	STATE_ARRAY(s, layer_properties);
+	STATE_ARRAY(s, prev_layer_properties);
+	STATE_ARRAY(s, sprite_properties);
+	STATE_VAR(s, video_palette);
+	STATE_VAR(s, y_prev);
+	STATE_VAR(s, s_pos_x_p);
+	STATE_VAR(s, eff_y_fp);
+	STATE_VAR(s, eff_x_fp);
+	STATE_VAR(s, kernal_mouse_enabled);
 }
