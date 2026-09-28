@@ -1,4 +1,5 @@
-LOCAL_PATH := $(call my-dir)
+# Absolute, so the source paths from Makefile.common are not prefixed twice
+LOCAL_PATH := $(abspath $(call my-dir))
 
 CORE_DIR := $(LOCAL_PATH)/..
 include $(CORE_DIR)/Makefile.common
