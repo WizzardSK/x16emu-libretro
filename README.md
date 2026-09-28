@@ -9,7 +9,8 @@
 
 > **libretro core:** this fork also builds x16emu as a libretro core for RetroArch
 > (`make -f Makefile.libretro`); see [src/libretro/README.md](src/libretro/README.md).
-> Prebuilt cores for Linux, Windows, macOS and Android are in the
+> It has save states, core options and SD card, PRG and BASIC content.
+> Prebuilt cores for Linux, Windows, macOS, iOS, tvOS and Android are in the
 > [libretro-latest release](../../releases/tag/libretro-latest).
 
 This is an emulator for the Commander X16 computer system. It only depends on SDL2 and should compile on all modern operating systems.

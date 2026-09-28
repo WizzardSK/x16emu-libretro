@@ -3,8 +3,16 @@
 Builds the Commander X16 emulator as a libretro core (RetroArch and other
 frontends), without SDL.
 
-    make -f Makefile.libretro            # x16emu_libretro.so / .dylib / .dll
-    make -f Makefile.libretro HAVE_ZLIB=0   # no gzip-compressed SD images
+    make -f Makefile.libretro                      # x16emu_libretro.so / .dylib / .dll
+    make -f Makefile.libretro platform=win CC=x86_64-w64-mingw32-gcc CXX=x86_64-w64-mingw32-g++
+    make -f Makefile.libretro platform=osx arch=arm64
+    make -f Makefile.libretro platform=ios-arm64   # x16emu_libretro_ios.dylib
+    make -f Makefile.libretro platform=tvos-arm64  # x16emu_libretro_tvos.dylib
+    ndk-build NDK_PROJECT_PATH=. APP_BUILD_SCRIPT=jni/Android.mk NDK_APPLICATION_MK=jni/Application.mk
+    make -f Makefile.libretro HAVE_ZLIB=0          # no gzip-compressed SD images
+
+The source list is in `Makefile.common`, shared by `Makefile.libretro` and
+`jni/Android.mk`. zlib is on by default except on Windows.
 
 ## Files
 
@@ -16,6 +24,10 @@ frontends), without SDL.
   controller code is compiled out with `__LIBRETRO__` in `video.c`,
   `audio.c`, `joystick.c`, `timing.c` and `main.c`; the SDL build is unchanged.
 - `debugger_stub.c`: the SDL-drawn debugger is not part of the core.
+- `../state.h`: save-state walk used by every emulation module.
+- `x16emu_libretro.info` (repository root): the core info file, in the
+  format of [libretro-core-info](https://github.com/libretro/libretro-core-info);
+  its name has to match the core's file name.
 
 ## Using it
 
@@ -60,6 +72,16 @@ frontends), without SDL.
 
 ## Builds
 
-`.github/workflows/libretro.yml` builds Linux (x86_64, aarch64), Windows,
-macOS (universal arm64 + x86_64) and Android (`jni/`, arm64-v8a, armeabi-v7a, x86_64,
-x86) and publishes them in the `libretro-latest` release.
+| Target | GitHub Actions | libretro GitLab |
+|---|---|---|
+| Linux x86_64, i686, aarch64 | yes | yes |
+| Windows x86_64, i686 | yes (MinGW) | yes |
+| macOS | universal (arm64 + x86_64) | x86_64, arm64 |
+| iOS arm64, tvOS arm64 | yes | yes |
+| Android armeabi-v7a, arm64-v8a, x86_64, x86 | yes | yes |
+
+- `.github/workflows/libretro.yml` builds every target on each push to the
+  `libretro` branch and publishes the zips (core plus `.info`) in the
+  [libretro-latest release](../../../../releases/tag/libretro-latest).
+- `.gitlab-ci.yml` uses the `libretro-infrastructure/ci-templates`, as the
+  other libretro cores do, for building on libretro's buildbot.
