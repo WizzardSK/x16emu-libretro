@@ -138,5 +138,8 @@ Copyright (c) 2019-2023 Michael Steil &lt;mist64@mac.com&gt;,
 [www.pagetable.com](https://www.pagetable.com/), et al.
 All rights reserved. License: 2-clause BSD (see `LICENSE`).
 
-The libretro API header is MIT licensed, the SDL scancode values in
-`src/libretro/shim/SDL.h` come from SDL2 (zlib license), ymfm is BSD 3-Clause.
+Third-party code (ymfm, the libretro API header, SDL2's scancode values,
+and winpthreads in the Windows builds) and its licenses are listed in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Every release zip carries
+`LICENSE.txt` and `THIRD_PARTY_NOTICES.md` beside the core, as the BSD and
+MIT licenses ask of binary distributions.

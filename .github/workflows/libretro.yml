@@ -65,7 +65,8 @@ jobs:
       - name: Package
         run: |
           mkdir -p dist
-          cp ${{ matrix.out }} x16emu_libretro.info dist/
+          cp ${{ matrix.out }} x16emu_libretro.info THIRD_PARTY_NOTICES.md dist/
+          cp LICENSE dist/LICENSE.txt
           cd dist && zip -9 ../x16emu_libretro-${{ matrix.name }}.zip *
       - uses: actions/upload-artifact@v4
         with:
@@ -87,7 +88,8 @@ jobs:
           for abi in libs/*; do
             cp "$abi/libretro.so" "dist/x16emu_libretro_android-$(basename "$abi").so"
           done
-          cp x16emu_libretro.info dist/
+          cp x16emu_libretro.info THIRD_PARTY_NOTICES.md dist/
+          cp LICENSE dist/LICENSE.txt
           cd dist && zip -9 ../x16emu_libretro-android.zip *
       - uses: actions/upload-artifact@v4
         with:
