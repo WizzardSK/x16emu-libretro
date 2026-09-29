@@ -110,8 +110,9 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'libretro-latest' }}
-          name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'libretro core (latest build)' }}
-          prerelease: ${{ !startsWith(github.ref, 'refs/tags/') }}
+          name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'x16emu libretro core' }}
+          prerelease: false
+          make_latest: true
           body: |
             Commander X16 libretro core (x16emu), built from `${{ github.sha }}`.
             Put the core in RetroArch's cores folder and `rom.bin` from an x16emu release in `system/x16/rom.bin`.
