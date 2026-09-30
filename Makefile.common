@@ -29,9 +29,13 @@ SOURCES_C := \
 	$(SRC)/iso_8859_15.c \
 	$(SRC)/midi.c \
 	$(SRC)/libretro/libretro.c \
-	$(SRC)/libretro/debugger_stub.c
+	$(SRC)/libretro/debugger_stub.c \
+	$(SRC)/extern/miniz/miniz.c
 SOURCES_CXX := \
 	$(SRC)/ymglue.cpp \
 	$(SRC)/extern/ymfm/src/ymfm_opm.cpp
 
-INCFLAGS := -I$(SRC)/libretro/shim -I$(SRC) -I$(SRC)/extern/include -I$(SRC)/extern/ymfm/src -I$(SRC)/libretro/fallback
+# miniz: reading only, and its own names so it cannot clash with zlib
+MINIZ_DEFINES := -DMINIZ_NO_ZLIB_COMPATIBLE_NAMES -DMINIZ_NO_ARCHIVE_WRITING_APIS -DMINIZ_NO_TIME
+
+INCFLAGS := -I$(SRC)/extern/miniz -I$(SRC)/libretro/shim -I$(SRC) -I$(SRC)/extern/include -I$(SRC)/extern/ymfm/src -I$(SRC)/libretro/fallback

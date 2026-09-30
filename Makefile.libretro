@@ -82,7 +82,7 @@ OBJECTS := $(SOURCES_C:.c=.lo) $(SOURCES_CXX:.cpp=.lo)
 GIT_REV := $(shell git rev-parse --short=8 HEAD 2>/dev/null || echo 00000000)
 GENERATED := $(SRC)/libretro/generated
 
-DEFINES := -D__LIBRETRO__
+DEFINES := -D__LIBRETRO__ $(MINIZ_DEFINES)
 ifeq ($(HAVE_ZLIB),1)
   DEFINES += -DHAVE_ZLIB
   LIBS += -lz

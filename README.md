@@ -43,10 +43,21 @@ every push:
 | `.prg` | loaded and run at start and after every reset |
 | `.bas` | BASIC listing, typed in and run at start and after every reset |
 | `.crt` | cartridge |
+| `.zip` | archive with any of the above, see below |
 | no content | boots into BASIC |
 
 With `.prg`, `.bas` and `.crt`, the folder of the content is the host file
 system on device 8, so a program can load its data files.
+
+Many X16 programs are a PRG plus data files, so the core opens ZIP archives
+itself rather than let the frontend extract a single file. An archive is
+extracted to `x16emu/<archive name>/` in the frontend's save directory, and
+from there the core starts, in this order: an `.img`, `AUTOBOOT.X16`, a
+`.prg` (preferably one named like the archive), a `.bas`, a `.crt`. When
+everything is in one top-level folder, that folder is used. A file picked
+inside the archive in the frontend's menu (`game.zip#FILE.PRG`) is started
+instead. The folder is the host file system, so high scores and saved games
+written there are kept; the archive is extracted again only when it changes.
 
 ## Controls
 
@@ -112,6 +123,8 @@ the release; `.gitlab-ci.yml` builds with libretro's
   merge.
 - `src/state.h`: the save-state walk. Every module has one `xxx_state()`
   function that measures, saves or loads, so the three always agree.
+- `src/extern/miniz`: [miniz](https://github.com/richgel999/miniz) 3.1.2,
+  for reading ZIP archives.
 - `x16emu_libretro.info`: the core info, in the format of
   [libretro-core-info](https://github.com/libretro/libretro-core-info).
 

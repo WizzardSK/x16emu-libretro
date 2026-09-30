@@ -5,12 +5,19 @@
 // after each completed VERA frame when built with __LIBRETRO__, the same way
 // the WebAssembly build yields to the browser.
 
+#include <errno.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <limits.h>
 #include <strings.h>
+#include <sys/stat.h>
+#include <dirent.h>
+#ifdef _WIN32
+#include <direct.h>
+#endif
+#include "miniz.h"
 
 #include "libretro.h"
 #include "../glue.h"
@@ -60,6 +67,9 @@ static retro_input_state_t input_state_cb;
 static retro_log_printf_t log_cb;
 
 static char system_dir[PATH_MAX];
+static char save_dir[PATH_MAX];
+static char zip_dir[PATH_MAX];
+static char zip_pick[PATH_MAX];
 static char content_dir[PATH_MAX];
 static char content_path[PATH_MAX];
 static bool game_loaded;
@@ -371,9 +381,9 @@ retro_get_system_info(struct retro_system_info *info)
 	memset(info, 0, sizeof(*info));
 	info->library_name     = "Commander X16 (x16emu)";
 	info->library_version  = "r" VER;
-	info->valid_extensions = "img|prg|bas|crt";
+	info->valid_extensions = "img|prg|bas|crt|zip";
 	info->need_fullpath    = true;   // SD card images are read and written in place
-	info->block_extract    = false;
+	info->block_extract    = true;
 }
 
 void
@@ -424,6 +434,10 @@ retro_init(void)
 	const char *dir = NULL;
 	if (environ_cb(RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY, &dir) && dir) {
 		snprintf(system_dir, sizeof(system_dir), "%s", dir);
+	}
+	dir = NULL;
+	if (environ_cb(RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY, &dir) && dir) {
+		snprintf(save_dir, sizeof(save_dir), "%s", dir);
 	}
 
 	supports_bitmasks = environ_cb(RETRO_ENVIRONMENT_GET_INPUT_BITMASKS, NULL);
@@ -479,6 +493,259 @@ has_extension(const char *path, const char *ext)
 {
 	size_t lp = strlen(path), le = strlen(ext);
 	return lp > le && path[lp - le - 1] == '.' && !strcasecmp(path + lp - le, ext);
+}
+
+// ---- .zip content --------------------------------------------------------------
+// X16 software is often a ZIP of a PRG and the data files it loads at run time
+// (the frontend's own archive support hands over one file only). The archive is
+// extracted once to <save dir>/x16emu/<zip name>/, which then serves as the
+// host file system, so files a game writes there (saves, high scores, an SD
+// card image) survive to the next start. It is extracted again only when the
+// ZIP itself changes.
+
+static bool
+make_dir(const char *path)
+{
+#ifdef _WIN32
+	return _mkdir(path) == 0 || errno == EEXIST;
+#else
+	return mkdir(path, 0755) == 0 || errno == EEXIST;
+#endif
+}
+
+// Create every directory on the way to path (path itself included)
+static bool
+make_dirs(const char *path)
+{
+	char tmp[PATH_MAX];
+	snprintf(tmp, sizeof(tmp), "%s", path);
+	for (char *p = tmp + 1; *p; p++) {
+		if (*p == '/' || *p == '\\') {
+			char c = *p;
+			*p = 0;
+			make_dir(tmp);
+			*p = c;
+		}
+	}
+	return make_dir(tmp);
+}
+
+// Entry names that would land outside the extraction directory are skipped
+static bool
+safe_zip_name(const char *name)
+{
+	if (!name[0] || name[0] == '/' || name[0] == '\\' || strchr(name, ':')) {
+		return false;
+	}
+	for (const char *p = name; *p; ) {
+		const char *end = p + strcspn(p, "/\\");
+		if (end - p == 2 && p[0] == '.' && p[1] == '.') {
+			return false;
+		}
+		p = *end ? end + 1 : end;
+	}
+	return true;
+}
+
+static bool
+extract_zip(const char *zip, const char *dest)
+{
+	struct stat st;
+	char stamp[64] = "", marker[PATH_MAX + 32], old[64] = "";
+	if (stat(zip, &st) == 0) {
+		snprintf(stamp, sizeof(stamp), "%lld %lld", (long long)st.st_size, (long long)st.st_mtime);
+	}
+	snprintf(marker, sizeof(marker), "%s/.x16emu-zip", dest);
+	FILE *m = fopen(marker, "rb");
+	if (m) {
+		size_t n = fread(old, 1, sizeof(old) - 1, m);
+		old[n] = 0;
+		fclose(m);
+		if (stamp[0] && !strcmp(old, stamp)) {
+			log_cb(RETRO_LOG_INFO, "[x16] using %s, extracted earlier\n", dest);
+			return true;
+		}
+	}
+
+	mz_zip_archive za;
+	memset(&za, 0, sizeof(za));
+	if (!mz_zip_reader_init_file(&za, zip, 0)) {
+		log_cb(RETRO_LOG_ERROR, "[x16] cannot open %s as a ZIP archive\n", zip);
+		return false;
+	}
+	make_dirs(dest);
+	bool ok = true;
+	mz_uint n = mz_zip_reader_get_num_files(&za);
+	for (mz_uint i = 0; i < n && ok; i++) {
+		mz_zip_archive_file_stat fs;
+		if (!mz_zip_reader_file_stat(&za, i, &fs)) {
+			continue;
+		}
+		if (!safe_zip_name(fs.m_filename)) {
+			log_cb(RETRO_LOG_WARN, "[x16] skipping ZIP entry %s\n", fs.m_filename);
+			continue;
+		}
+		char out[PATH_MAX + 512];
+		snprintf(out, sizeof(out), "%s/%s", dest, fs.m_filename);
+		for (char *c = out + strlen(dest); *c; c++) {
+			if (*c == '\\') {
+				*c = '/';
+			}
+		}
+		if (mz_zip_reader_is_file_a_directory(&za, i)) {
+			make_dirs(out);
+			continue;
+		}
+		char *slash = strrchr(out, '/');
+		if (slash) {
+			*slash = 0;
+			make_dirs(out);
+			*slash = '/';
+		}
+		if (!mz_zip_reader_extract_to_file(&za, i, out, 0)) {
+			log_cb(RETRO_LOG_ERROR, "[x16] cannot extract %s\n", fs.m_filename);
+			ok = false;
+		}
+	}
+	mz_zip_reader_end(&za);
+
+	if (ok && (m = fopen(marker, "wb"))) {
+		fputs(stamp, m);
+		fclose(m);
+	}
+	log_cb(RETRO_LOG_INFO, "[x16] extracted %u entries of %s to %s\n", (unsigned)n, zip, dest);
+	return ok;
+}
+
+// What to start from an extracted archive, in this order: an SD card image,
+// AUTOBOOT.X16 (the KERNAL runs it from the host file system by itself), a PRG
+// (preferably one named like the archive), a BASIC listing, a cartridge. A
+// single top-level folder holding everything is looked into.
+static bool
+pick_zip_content(const char *dir, const char *zip_base, char *out, size_t out_size)
+{
+	char cur[PATH_MAX];
+	snprintf(cur, sizeof(cur), "%s", dir);
+	size_t bl = strlen(zip_base);
+	for (int depth = 0; depth < 4; depth++) {
+		DIR *d = opendir(cur);
+		if (!d) {
+			return false;
+		}
+		char best[5][256] = { "", "", "", "", "" };
+		char named_prg[256] = "";
+		char subdir[256] = "";
+		int subdirs = 0;
+		struct dirent *e;
+		while ((e = readdir(d))) {
+			const char *name = e->d_name;
+			if (name[0] == '.') {
+				continue;
+			}
+			char full[PATH_MAX + 256];
+			struct stat st;
+			snprintf(full, sizeof(full), "%s/%s", cur, name);
+			if (stat(full, &st) == 0 && S_ISDIR(st.st_mode)) {
+				subdirs++;
+				snprintf(subdir, sizeof(subdir), "%s", name);
+				continue;
+			}
+			int kind = has_extension(name, "img") ? 0
+				: !strcasecmp(name, "AUTOBOOT.X16") ? 1
+				: has_extension(name, "prg") ? 2
+				: has_extension(name, "bas") ? 3
+				: has_extension(name, "crt") ? 4 : -1;
+			if (kind < 0) {
+				continue;
+			}
+			if (kind == 2 && !strncasecmp(name, zip_base, bl) && name[bl] == '.') {
+				snprintf(named_prg, sizeof(named_prg), "%s", name);
+			}
+			// readdir order is arbitrary; take the alphabetically first
+			if (!best[kind][0] || strcasecmp(name, best[kind]) < 0) {
+				snprintf(best[kind], sizeof(best[kind]), "%s", name);
+			}
+		}
+		closedir(d);
+		if (named_prg[0]) {
+			snprintf(best[2], sizeof(best[2]), "%s", named_prg);
+		}
+		for (int k = 0; k < 5; k++) {
+			if (best[k][0]) {
+				snprintf(out, out_size, "%s/%s", cur, best[k]);
+				return true;
+			}
+		}
+		if (subdirs != 1) {
+			return false;
+		}
+		size_t len = strlen(cur);
+		snprintf(cur + len, sizeof(cur) - len, "/%s", subdir);
+	}
+	return false;
+}
+
+// Where a content path names a ZIP archive, the length of the archive's own
+// path; 0 otherwise. Frontends name a file picked inside an archive as
+// "archive.zip#dir/file".
+static size_t
+zip_path_length(const char *path)
+{
+	for (const char *p = path; (p = strchr(p, '.')); p++) {
+		if (!strncasecmp(p, ".zip", 4) && (!p[4] || p[4] == '#')) {
+			return p + 4 - path;
+		}
+	}
+	return 0;
+}
+
+// Turns a ZIP content path into the file to start; NULL when nothing usable
+// is inside
+static const char *
+open_zip_content(const char *content)
+{
+	char zip[PATH_MAX];
+	size_t len = zip_path_length(content);
+	snprintf(zip, sizeof(zip), "%.*s", (int)len, content);
+	const char *inner = content[len] == '#' ? content + len + 1 : NULL;
+
+	const char *base = strrchr(zip, '/');
+#ifdef _WIN32
+	const char *bbase = strrchr(zip, '\\');
+	if (bbase > base) {
+		base = bbase;
+	}
+#endif
+	base = base ? base + 1 : zip;
+	char name[256];
+	snprintf(name, sizeof(name), "%s", base);
+	name[strlen(name) - 4] = 0;
+
+	const char *root = save_dir[0] ? save_dir : system_dir;
+	snprintf(zip_dir, sizeof(zip_dir), "%s/x16emu/%s", root, name);
+	if (!extract_zip(zip, zip_dir)) {
+		return NULL;
+	}
+	if (inner && *inner && safe_zip_name(inner)) {
+		struct stat st;
+		snprintf(zip_pick, sizeof(zip_pick), "%s/%s", zip_dir, inner);
+		for (char *c = zip_pick + strlen(zip_dir); *c; c++) {
+			if (*c == '\\') {
+				*c = '/';
+			}
+		}
+		if (stat(zip_pick, &st) == 0 && !S_ISDIR(st.st_mode)) {
+			log_cb(RETRO_LOG_INFO, "[x16] starting %s\n", zip_pick);
+			return zip_pick;
+		}
+		log_cb(RETRO_LOG_WARN, "[x16] %s is not in %s\n", inner, zip);
+	}
+	if (!pick_zip_content(zip_dir, name, zip_pick, sizeof(zip_pick))) {
+		log_cb(RETRO_LOG_ERROR, "[x16] %s holds no .img, AUTOBOOT.X16, .prg, .bas or .crt\n", zip);
+		return NULL;
+	}
+	log_cb(RETRO_LOG_INFO, "[x16] starting %s\n", zip_pick);
+	return zip_pick;
 }
 
 // The KERNAL ROM (rom.bin from the x16-rom release) is looked for in the
@@ -546,6 +813,9 @@ retro_load_game(const struct retro_game_info *game)
 	cartridge_path = NULL;
 
 	const char *path = game ? game->path : NULL;
+	if (path && zip_path_length(path) && !(path = open_zip_content(path))) {
+		return false;
+	}
 	if (path) {
 		snprintf(content_dir, sizeof(content_dir), "%s", path);
 		char *slash = strrchr(content_dir, '/');
@@ -565,7 +835,10 @@ retro_load_game(const struct retro_game_info *game)
 		fsroot_path = (uint8_t *)content_dir;
 		startin_path = (uint8_t *)content_dir;
 
-		if (has_extension(path, "img")) {
+		if (!strcasecmp(path + strlen(content_dir) + 1, "AUTOBOOT.X16")) {
+			// Nothing to queue: the KERNAL loads and runs AUTOBOOT.X16 from
+			// the host file system on its own
+		} else if (has_extension(path, "img")) {
 			// Boot from the SD card image; the KERNAL runs AUTOBOOT.X16 if present
 			sdcard_set_path(path);
 			using_hostfs = false;
