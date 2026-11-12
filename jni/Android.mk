@@ -7,7 +7,7 @@ include $(CORE_DIR)/Makefile.common
 include $(CLEAR_VARS)
 LOCAL_MODULE    := retro
 LOCAL_SRC_FILES := $(SOURCES_C) $(SOURCES_CXX)
-LOCAL_C_INCLUDES := $(patsubst -I%,%,$(INCFLAGS))
+LOCAL_C_INCLUDES := $(patsubst -I%,%,$(filter-out -iquote,$(INCFLAGS)))
 LOCAL_CFLAGS    := -D__LIBRETRO__ $(MINIZ_DEFINES) -DHAVE_ZLIB -std=gnu11 -Wno-unused-function
 LOCAL_CPPFLAGS  := -D__LIBRETRO__ $(MINIZ_DEFINES) -DHAVE_ZLIB -std=c++14
 LOCAL_LDLIBS    := -lz -lm

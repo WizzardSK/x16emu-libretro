@@ -38,4 +38,7 @@ SOURCES_CXX := \
 # miniz: reading only, and its own names so it cannot clash with zlib
 MINIZ_DEFINES := -DMINIZ_NO_ZLIB_COMPATIBLE_NAMES -DMINIZ_NO_ARCHIVE_WRITING_APIS -DMINIZ_NO_TIME
 
-INCFLAGS := -I$(SRC)/extern/miniz -I$(SRC)/libretro/shim -I$(SRC) -I$(SRC)/extern/include -I$(SRC)/extern/ymfm/src -I$(SRC)/libretro/fallback
+# src only for "..." includes: its endian.h would stand in for the system's
+# <endian.h>, which glibc before 2.28 pulls into <stdlib.h> (waitstatus.h:
+# duplicate member '__w_retcode' on the buildbot's Linux images)
+INCFLAGS := -I$(SRC)/extern/miniz -I$(SRC)/libretro/shim -iquote $(SRC) -I$(SRC)/extern/include -I$(SRC)/extern/ymfm/src -I$(SRC)/libretro/fallback
