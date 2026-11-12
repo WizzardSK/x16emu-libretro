@@ -42,15 +42,15 @@ jobs:
             out: x16emu_libretro.dll
           # One universal dylib (arm64 + x86_64); Intel macOS runners are gone
           - name: macos-universal
-            os: macos-14
+            os: macos-15
             make: make -f Makefile.libretro -j4 platform=osx CFLAGS="-arch arm64 -arch x86_64" CXXFLAGS="-arch arm64 -arch x86_64" LDFLAGS="-arch arm64 -arch x86_64"
             out: x16emu_libretro.dylib
           - name: ios-arm64
-            os: macos-14
+            os: macos-15
             make: make -f Makefile.libretro -j4 platform=ios-arm64
             out: x16emu_libretro_ios.dylib
           - name: tvos-arm64
-            os: macos-14
+            os: macos-15
             make: make -f Makefile.libretro -j4 platform=tvos-arm64
             out: x16emu_libretro_tvos.dylib
     name: ${{ matrix.name }}
